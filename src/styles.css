@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* Light-thema, 1-op-1 afgestemd op Goalflow: navy-blauw + goud accent.
+   Tokenwaarden komen uit Goalflow's globals.css (html[data-theme="light"]). */
+@theme {
+  /* Navy-palet (Goalflow) */
+  --color-navy-50: #f1f4fa;
+  --color-navy-100: #dde5f1;
+  --color-navy-200: #bccae0;
+  --color-navy-300: #8ca7cc;
+  --color-navy-400: #5a80b5;
+  --color-navy-500: #3b63a0;
+  --color-navy-600: #2c4f87;
+  --color-navy-700: #25406b;
+  --color-navy-800: #213553;
+  --color-navy-900: #1b2a44;
+
+  /* Semantische tokens (light) */
+  --color-canvas: #f5f7fb; /* surface-base — paginavlak */
+  --color-card: #ffffff; /* surface-raised */
+  --color-ink: #1b2a44; /* text-base — koppen */
+  --color-ink-soft: #213553; /* text-body */
+  --color-muted: #3b63a0; /* secundaire tekst (navy-500) */
+  --color-line: #d0daea; /* surface-border */
+  --color-subtle: #edf0f8; /* surface-overlay — lichte vlakken */
+  --color-subtle-hover: #dde5f1; /* navy-100 */
+  --color-brand: #2c4f87; /* primary — navy-600 (knoppen/badges) */
+  --color-brand-soft: #dde5f1;
+
+  /* Goud accent (Goalflow) */
+  --color-accent: #f59e0b;
+  --color-accent-soft: #fef3c7;
+  --color-accent-ink: #b45309;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink-soft);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+textarea,
+input,
+select {
+  font: inherit;
+}
+
+/* Doorlopende ticker-band */
+@keyframes nt-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.nt-ticker {
+  animation: nt-ticker 80s linear infinite;
+}
+.nt-ticker:hover {
+  animation-play-state: paused;
+}

@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build-output (opnieuw te genereren met: npm run build)
+dist/
+
+# GEHEIMEN — nooit committen
+key.pem
+*.pem
+.env
+.env.*
+!.env.example
+
+# Logs van de Proton-helper
+*.log
+
+# OS
+.DS_Store

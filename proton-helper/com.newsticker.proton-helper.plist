@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.newsticker.proton-helper</string>
+
+  <!-- Pas dit node-pad aan na een Node-update. Opvragen met: which node -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/mkb/.nvm/versions/node/v22.18.0/bin/node</string>
+    <string>/Users/mkb/programms/newsticker/proton-helper/server.mjs</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/mkb/programms/newsticker/proton-helper</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/mkb/programms/newsticker/proton-helper/helper.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/mkb/programms/newsticker/proton-helper/helper.err.log</string>
+</dict>
+</plist>

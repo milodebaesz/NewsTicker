@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Newsticker — jouw relevante nieuws",
+  "version": "0.1.0",
+  "description": "Verzamelt nieuws (RSS), Gmail en Google Agenda en filtert met AI op wat voor jou relevant is.",
+  "permissions": ["storage", "alarms", "identity"],
+  "host_permissions": ["<all_urls>"],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7wnTkmuUa3OTNaLnGxEBANvert2iS1w+enP0lEy8gaVI4Zw7nSCu2sv1LmNFecsm+zr64fjwsEMLevFOFnd8Q9v/Nra+CyuyWD6ZUOH0nSvg028LTej63X1XDtxoemUgALlvDf72Y6PC1iWIcpFDKLTQWMb33ekJMQgzS1xz1d4KE8WRjsiFzeV9NB+G3ySrKsOqO3uY+mjgfvqTr/UFIgqVLdCUcnxd4KCp0lSbAJ4WYpnmX/5aUQ13IbaJxI89Sbw/59gHyFJtDJgLm/MUj8KUJwUgqx6xR8Yoj173Pbgckh9uNLxV3IYEqbgNHPqErjdOobpKXH6Ax4K7dgrXbwIDAQAB",
+  "oauth2": {
+    "client_id": "242379989630-5ertsvim4qfkqnbevde88307vdbdcqgd.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/calendar.readonly"
+    ]
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
