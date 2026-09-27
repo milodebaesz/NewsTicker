@@ -16,3 +16,9 @@ key.pem
 
 # OS
 .DS_Store
+
+# iOS (project wordt gegenereerd met: cd ios && xcodegen)
+ios/*.xcodeproj/
+ios/build/
+xcuserdata/
+DerivedData/

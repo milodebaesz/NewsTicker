@@ -50,3 +50,19 @@ de extensie alleen laten lezen — dan verlaat de key nooit de server.
 - [ ] Agenda (Google Calendar)
 - [ ] Beurs (Finnhub/Twelve Data watchlist)
 - [ ] Optionele Supabase-sync tussen apparaten
+
+## iOS-app (native SwiftUI)
+
+In `ios/` staat een native iPhone/iPad-versie met dezelfde nieuws-pijplijn:
+RSS/Atom ophalen, og:image-aanvulling, AI-relevantiescore via OpenAI,
+onderwerp-chips, bronnenfilter, zoeken en de doorlopende ticker. De OpenAI-key
+staat in de iOS-Keychain; verversen gebeurt bij openen, via pull-to-refresh en
+op de achtergrond (`BGAppRefreshTask`).
+
+```bash
+cd ios
+xcodegen            # genereert Newsticker.xcodeproj uit project.yml
+open Newsticker.xcodeproj
+```
+
+Mail (Gmail/Proton) en Agenda zitten nog niet in de iOS-versie.
