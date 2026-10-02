@@ -6,7 +6,7 @@ struct ContentView: View {
     @State private var topic = ""
     @State private var showSettings = false
     @State private var showAddSource = false
-    @State private var reading: FeedItem?
+    @State private var reading: StoryClusters.Story?
     // De volgorde van de feed ligt vast tot je hem zelf ververst, zodat kaarten
     // niet verspringen terwijl je leest of terwijl de AI nog aan het scoren is.
     @State private var order: [String] = []
@@ -91,12 +91,14 @@ struct ContentView: View {
                         if !topics.isEmpty { topicChips }
                         if store.scoringRemaining > 0 { scoringBanner }
                         if !store.lastError.isEmpty { errorBanner }
-                        BentoFeed(items: visible, open: open)
+                        BentoFeed(stories: StoryClusters.group(visible), open: open)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                         if visible.isEmpty { emptyState }
                     } header: {
-                        if !tickerItems.isEmpty { TickerView(items: tickerItems, onTap: open) }
+                        if !tickerItems.isEmpty {
+                            TickerView(items: tickerItems) { open(StoryClusters.Story(lead: $0, others: [])) }
+                        }
                     }
                 }
             }
@@ -145,17 +147,16 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAddSource) { AddSourceView() }
-        .sheet(item: $reading) { SafariView(url: URL(string: $0.url)!).ignoresSafeArea() }
+        .sheet(item: $reading) { ReaderView(story: $0) }
         .task {
             applyOrder()
             if store.isStale { await store.refresh() } else { store.startScoring() }
         }
     }
 
-    private func open(_ item: FeedItem) {
-        guard URL(string: item.url) != nil else { return }
-        reading = item
-        store.markRead(item)
+    private func open(_ story: StoryClusters.Story) {
+        reading = story
+        story.all.forEach(store.markRead)
     }
 
     private var statusLabel: some View {

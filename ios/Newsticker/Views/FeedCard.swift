@@ -2,12 +2,13 @@ import SwiftUI
 
 // Bento-ritme voor de telefoon: groot, twee naast elkaar, breed, twee naast elkaar, …
 struct BentoFeed: View {
-    let items: [FeedItem]
-    let open: (FeedItem) -> Void
+    typealias Story = StoryClusters.Story
+    let stories: [Story]
+    let open: (Story) -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private enum Row: Identifiable {
-        case big(FeedItem), wide(FeedItem), pair([FeedItem])
+        case big(Story), wide(Story), pair([Story])
         var id: String {
             switch self {
             case .big(let i), .wide(let i): i.id
@@ -18,7 +19,7 @@ struct BentoFeed: View {
 
     private var rows: [Row] {
         var out: [Row] = []
-        var rest = items[...]
+        var rest = stories[...]
         var step = 0
         while let first = rest.first {
             switch step % 4 {
@@ -37,13 +38,13 @@ struct BentoFeed: View {
         LazyVStack(spacing: 12) {
             ForEach(rows) { row in
                 switch row {
-                case .big(let item):
-                    FeedCard(item: item, style: .big, open: open).frame(height: sizeClass == .regular ? 360 : 280)
-                case .wide(let item):
-                    FeedCard(item: item, style: .wide, open: open).frame(height: 130)
+                case .big(let story):
+                    FeedCard(story: story, style: .big, open: open).frame(height: sizeClass == .regular ? 360 : 280)
+                case .wide(let story):
+                    FeedCard(story: story, style: .wide, open: open).frame(height: 130)
                 case .pair(let pair):
                     HStack(spacing: 12) {
-                        ForEach(pair) { FeedCard(item: $0, style: .small, open: open) }
+                        ForEach(pair) { FeedCard(story: $0, style: .small, open: open) }
                         if pair.count < (sizeClass == .regular ? 3 : 2) { Color.clear }
                     }
                     .frame(height: 200)
@@ -56,9 +57,10 @@ struct BentoFeed: View {
 struct FeedCard: View {
     enum Style { case big, small, wide }
 
-    let item: FeedItem
+    let story: StoryClusters.Story
     let style: Style
-    let open: (FeedItem) -> Void
+    let open: (StoryClusters.Story) -> Void
+    private var item: FeedItem { story.lead }
     @Environment(AppStore.self) private var store
     @State private var imageFailed = false
 
@@ -67,7 +69,7 @@ struct FeedCard: View {
     }
 
     var body: some View {
-        Button { open(item) } label: {
+        Button { open(story) } label: {
             Group {
                 if style == .wide {
                     wideLayout
@@ -95,8 +97,8 @@ struct FeedCard: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("Gelezen", systemImage: "checkmark") { store.markRead(item) }
-            Button("Verbergen", systemImage: "eye.slash") { store.dismiss(item) }
+            Button("Gelezen", systemImage: "checkmark") { story.all.forEach(store.markRead) }
+            Button("Verbergen", systemImage: "eye.slash") { story.all.forEach(store.dismiss) }
             if let url = URL(string: item.url) { ShareLink(item: url) }
         } preview: {
             preview
@@ -175,7 +177,21 @@ struct FeedCard: View {
     private func meta(onImage: Bool) -> some View {
         HStack(spacing: 6) {
             Text(item.sourceLabel).fontWeight(.semibold).foregroundStyle(onImage ? .white : Theme.brand)
-            Text("· \(item.publishedAt.timeAgo)")
+            if !story.others.isEmpty {
+                // Zelfde verhaal bij meer bronnen.
+                Label("+\(story.others.count)", systemImage: "rectangle.stack.fill")
+                    .labelStyle(.titleAndIcon)
+                    .imageScale(.small)
+                    .fontWeight(.semibold)
+                    .fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .foregroundStyle(onImage ? .white : Theme.brand)
+                    .background(onImage ? .white.opacity(0.2) : Theme.brand.opacity(0.1), in: .capsule)
+                    .accessibilityLabel("Ook bij \(story.others.map(\.sourceLabel).formatted(.list(type: .and)))")
+            }
+            if style != .small || story.others.isEmpty {
+                Text("· \(item.publishedAt.timeAgo)")
+            }
             if !item.topic.isEmpty && style != .small {
                 Text(item.topic)
                     .padding(.horizontal, 7).padding(.vertical, 2)
