@@ -199,13 +199,6 @@ struct FeedCard: View {
                     .overlay { if !onImage { Capsule().strokeBorder(Theme.line) } }
             }
             Spacer(minLength: 0)
-            if let r = item.relevance {
-                Text("\(r)")
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .foregroundStyle(r >= 70 ? .black : (onImage ? .white : Theme.ink))
-                    .background(r >= 70 ? Theme.accent : (onImage ? .white.opacity(0.2) : Theme.subtle), in: .capsule)
-            }
         }
         .font(.caption2)
         .lineLimit(1)
