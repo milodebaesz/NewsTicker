@@ -21,20 +21,21 @@ struct ContentView: View {
 
     // Gewenste volgorde op dit moment: drempel + sortering, zonder gelezen items.
     private var liveOrder: [String] {
-        store.items
-            .filter { i in
-                if i.dismissed || i.read { return false }
-                if scoring, let r = i.relevance, r < store.settings.minRelevance { return false }
-                return true
-            }
-            .sorted { a, b in
-                // op relevantie als scoring aan staat (nog niet gescoord telt als
-                // middelmatig), anders nieuwste eerst
-                let ra = a.relevance ?? 55, rb = b.relevance ?? 55
-                if scoring && ra != rb { return ra > rb }
-                return a.publishedAt > b.publishedAt
-            }
-            .map(\.id)
+        // Rangscore = AI-relevantie + wat de app van je geleerd heeft; bij
+        // gelijke stand nieuwste eerst.
+        let minimum = Double(store.settings.minRelevance)
+        var ranked: [(item: FeedItem, rank: Double)] = []
+        for item in store.items where !item.dismissed && !item.read {
+            let rank = store.rank(item)
+            // Drempel alleen op gescoorde artikelen; een geleerde voorkeur
+            // kan een artikel er alsnog overheen tillen.
+            if scoring && item.relevance != nil && rank < minimum { continue }
+            ranked.append((item, rank))
+        }
+        ranked.sort { a, b in
+            abs(a.rank - b.rank) > 0.5 ? a.rank > b.rank : a.item.publishedAt > b.item.publishedAt
+        }
+        return ranked.map { $0.item.id }
     }
 
     // De getoonde volgorde zonder intussen gelezen of verborgen items.
@@ -154,6 +155,10 @@ struct ContentView: View {
                 }
             }
             .onChange(of: store.settings.minRelevance) { applyOrder() }
+            .onChange(of: store.preferences.influence) { applyOrder() }
+            .onChange(of: store.preferences.weights) {
+                if liveOrder != unreadOrder { withAnimation(.snappy) { newOrderReady = true } }
+            }
             .onChange(of: store.settings.engine) { applyOrder() }
             .searchable(text: $query, prompt: "Zoeken…")
             .navigationTitle("Newsticker")
@@ -195,7 +200,7 @@ struct ContentView: View {
 
     private func open(_ story: StoryClusters.Story) {
         reading = story
-        story.all.forEach(store.markRead)
+        store.learn(.opened, from: story)
     }
 
     private var statusLabel: some View {

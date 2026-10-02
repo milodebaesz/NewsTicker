@@ -16,6 +16,11 @@ struct SettingsView: View {
                     } label: {
                         LabeledContent("Bronnen", value: "\(store.sources.filter(\.enabled).count) actief")
                     }
+                    NavigationLink {
+                        AlgorithmView()
+                    } label: {
+                        Label("Jouw algoritme", systemImage: "brain")
+                    }
                 }
 
                 Section {

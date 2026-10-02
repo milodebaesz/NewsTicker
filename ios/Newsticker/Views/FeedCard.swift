@@ -97,8 +97,12 @@ struct FeedCard: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Section {
+                Button("Meer hiervan", systemImage: "hand.thumbsup") { store.learn(.more, from: story) }
+                Button("Minder hiervan", systemImage: "hand.thumbsdown") { store.learn(.less, from: story) }
+            }
             Button("Gelezen", systemImage: "checkmark") { story.all.forEach(store.markRead) }
-            Button("Verbergen", systemImage: "eye.slash") { story.all.forEach(store.dismiss) }
+            Button("Verbergen", systemImage: "eye.slash") { store.learn(.dismissed, from: story) }
             if let url = URL(string: item.url) { ShareLink(item: url) }
         } preview: {
             preview

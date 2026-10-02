@@ -52,7 +52,7 @@ final class AppStore {
         guard !isBuildingBriefing else { return }
         isBuildingBriefing = true
         defer { isBuildingBriefing = false }
-        let stories = BriefingBuilder.pickStories(from: items, hiddenSources: hiddenSources)
+        let stories = BriefingBuilder.pickStories(from: items, hiddenSources: hiddenSources, rank: rank)
         let built = await BriefingBuilder.build(stories: stories)
         briefing = built
         Persist.save(built, "briefing")
@@ -323,6 +323,30 @@ final class AppStore {
 
     func markRead(_ item: FeedItem) { patch([item.id: ()]) { i, _ in i.read = true } }
     func dismiss(_ item: FeedItem) { patch([item.id: ()]) { i, _ in i.dismissed = true } }
+
+    // MARK: - Leren van wat je leest
+
+    var preferences: LearnedPreferences = Persist.load(LearnedPreferences.self, "preferences") ?? LearnedPreferences() {
+        didSet { Persist.save(preferences, "preferences") }
+    }
+
+    /// Een signaal over een heel verhaal; telt één keer (het hoofdartikel),
+    /// zodat een verhaal met drie bronnen niet driedubbel weegt.
+    func learn(_ signal: LearnedPreferences.Signal, from story: StoryClusters.Story) {
+        preferences.learn(signal, from: story.lead)
+        switch signal {
+        case .opened: story.all.forEach(markRead)
+        case .dismissed, .less: story.all.forEach(dismiss)
+        case .more: break
+        }
+    }
+
+    /// Rangscore voor feed en briefing: AI-relevantie (of neutraal 55) plus
+    /// wat de app van je geleerd heeft.
+    func rank(_ item: FeedItem) -> Double {
+        let base = scoringActive ? Double(item.relevance ?? 55) : 55
+        return base + preferences.boost(for: item)
+    }
 
     private func patch<V>(_ values: [String: V], save: Bool = true, _ apply: (inout FeedItem, V) -> Void) {
         guard !values.isEmpty else { return }

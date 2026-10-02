@@ -39,7 +39,7 @@ enum StoryClusters {
         return stories
     }
 
-    private static let stopwords: Set<String> = Set("""
+    static let stopwords: Set<String> = Set("""
     de het een en van in op te dat die voor met is zijn aan er niet om ook als bij of naar uit door over tot was \
     wordt worden heeft hebben nog maar dan meer kan na al wel dit deze zo geen wat wie hoe waar wil gaat komt jaar \
     nieuwe live the a an of to in on for and is are with as at by from that this it be has have after over new more \
@@ -47,11 +47,12 @@ enum StoryClusters {
     """.split(whereSeparator: \.isWhitespace).map(String.init))
 
     // Inhoudswoorden, afgekapt op 7 tekens als simpele stam ("stopzetten" ≈ "stopzet").
-    private static func words(_ text: some StringProtocol) -> Set<String> {
+    static func words(_ text: some StringProtocol) -> Set<String> {
         Set(text.lowercased()
             .split { !$0.isLetter && !$0.isNumber }
             .filter { $0.count >= 3 }
             .map { String($0.prefix(7)) }
             .filter { !stopwords.contains($0) })
     }
+
 }

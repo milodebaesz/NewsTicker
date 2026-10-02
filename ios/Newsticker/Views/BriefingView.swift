@@ -141,6 +141,6 @@ struct BriefingView: View {
         guard let lead = items.first else { return }
         let story = StoryClusters.Story(lead: lead, others: Array(items.dropFirst()))
         reading = story
-        story.all.forEach(store.markRead)
+        store.learn(.opened, from: story)
     }
 }

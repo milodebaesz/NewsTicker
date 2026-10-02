@@ -24,17 +24,18 @@ enum BriefingBuilder {
 
     /// Kiest de verhalen: ongelezen, van de afgelopen 24 uur, op relevantie,
     /// met een kleine voorkeur voor nieuws dat meerdere bronnen brengen.
-    static func pickStories(from items: [FeedItem], hiddenSources: Set<String>) -> [StoryClusters.Story] {
+    static func pickStories(from items: [FeedItem], hiddenSources: Set<String>,
+                            rank: (FeedItem) -> Double) -> [StoryClusters.Story] {
         let since = Date.now.addingTimeInterval(-24 * 3600)
         let candidates = items
             .filter { !$0.dismissed && !$0.read && $0.publishedAt > since && !hiddenSources.contains($0.sourceLabel) }
-            .sorted { a, b in
-                let ra = a.relevance ?? 55, rb = b.relevance ?? 55
-                return ra != rb ? ra > rb : a.publishedAt > b.publishedAt
-            }
-        func weight(_ s: StoryClusters.Story) -> Int { (s.lead.relevance ?? 55) + 8 * min(s.others.count, 3) }
-        return Array(StoryClusters.group(candidates)
-            .filter { (weight($0)) >= 40 } // niet-relevant overslaan
+            .map { ($0, rank($0)) }
+            .sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.publishedAt > $1.0.publishedAt }
+        let rankById = Dictionary(candidates.map { ($0.0.id, $0.1) }, uniquingKeysWith: { a, _ in a })
+        // Kleine voorkeur voor nieuws dat meerdere bronnen brengen.
+        func weight(_ s: StoryClusters.Story) -> Double { (rankById[s.lead.id] ?? 55) + 8 * Double(min(s.others.count, 3)) }
+        return Array(StoryClusters.group(candidates.map(\.0))
+            .filter { weight($0) >= 40 } // niet-relevant overslaan
             .sorted { weight($0) > weight($1) }
             .prefix(size))
     }
