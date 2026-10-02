@@ -91,7 +91,21 @@ final class AppStore {
     /// Haalt alle bronnen op. Het scoren loopt daarna los op de achtergrond
     /// verder (zie `scoringTask`), zodat verversen snel klaar is.
     func refresh() async {
-        guard !isRefreshing else { return }
+        // Loopt er al een verversing (bv. gestart door de app bij openen), wacht
+        // daar dan op i.p.v. meteen terug te keren met nog oud nieuws.
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
+        let task = Task { await performRefresh() }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+    }
+
+    private var refreshTask: Task<Void, Never>?
+
+    private func performRefresh() async {
         isRefreshing = true
 
         let (collected, errors) = await Self.fetchAll(sources.filter(\.enabled))
@@ -116,13 +130,25 @@ final class AppStore {
     func startScoring() {
         guard scoringTask == nil else { return }
         scoringTask = Task {
-            if let error = await rescore() {
+            let error = await rescore()
+            // Haperingen van Apple Intelligence lossen zich vanzelf op bij een
+            // volgende ronde; alleen OpenAI-fouten (bv. een ongeldige key) zijn
+            // iets waar de gebruiker zelf iets mee kan.
+            if let error, settings.engine == .openAI {
                 lastError = [lastError, error].filter { !$0.isEmpty }.joined(separator: " · ")
             }
             scoringTask = nil
             feedVersion += 1
         }
     }
+
+    /// Bij naar de achtergrond gaan: stoppen i.p.v. laten mislukken. De rest
+    /// komt bij de volgende ronde of in de achtergrondtaak.
+    func pauseScoring() {
+        scoringTask?.cancel()
+    }
+
+    func clearError() { lastError = "" }
 
     /// Voor de achtergrondtaak: wacht tot ook het scoren klaar is.
     func waitForScoring() async {

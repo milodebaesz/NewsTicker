@@ -32,6 +32,7 @@ struct NewstickerApp: App {
             case .active where store.isStale:
                 Task { await store.refresh() }
             case .background:
+                store.pauseScoring()
                 scheduleAppRefresh()
                 scheduleScoring()
                 Task { await store.scheduleBriefingNotification() }

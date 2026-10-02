@@ -12,7 +12,10 @@ struct ContentView: View {
     // De volgorde van de feed ligt vast tot je hem zelf ververst, zodat kaarten
     // niet verspringen terwijl je leest of terwijl de AI nog aan het scoren is.
     @State private var order: [String] = []
-    @State private var newOrderReady = false
+    @State private var newArticles = 0 // nieuw binnengekomen sinds de volgorde vastgezet werd
+    @State private var orderAppliedAt = Date.distantPast
+    @State private var applyAfterRefresh = false // terug in de app: verversing direct tonen
+    @Environment(\.scenePhase) private var scenePhase
     // Verhaalindeling (zelfde nieuws, meerdere bronnen) bij de vaste volgorde;
     // alleen opnieuw berekend als de volgorde verandert.
     @State private var groups: [[String]] = []
@@ -38,12 +41,6 @@ struct ContentView: View {
         return ranked.map { $0.item.id }
     }
 
-    // De getoonde volgorde zonder intussen gelezen of verborgen items.
-    private var unreadOrder: [String] {
-        let unread = Set(store.items.filter { !$0.read && !$0.dismissed }.map(\.id))
-        return order.filter(unread.contains)
-    }
-
     private func applyOrder() {
         let next = liveOrder
         let byId = Dictionary(store.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -51,7 +48,8 @@ struct ContentView: View {
         withAnimation(.snappy) {
             order = next
             groups = nextGroups
-            newOrderReady = false
+            newArticles = 0
+            orderAppliedAt = .now
         }
     }
 
@@ -133,9 +131,9 @@ struct ContentView: View {
                 applyOrder()
             }
             .overlay(alignment: .top) {
-                if newOrderReady {
+                if newArticles > 0 {
                     Button { applyOrder() } label: {
-                        Label("Nieuwe volgorde — tik om bij te werken", systemImage: "arrow.up")
+                        Label(newArticles == 1 ? "1 nieuw artikel" : "\(newArticles) nieuwe artikelen", systemImage: "arrow.up")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
@@ -147,18 +145,27 @@ struct ContentView: View {
                 }
             }
             .onChange(of: store.feedVersion) {
-                // Eerste keer meteen tonen; daarna alleen aanbieden.
-                if order.isEmpty {
+                // Eerste keer meteen tonen. Daarna alleen een knop bij écht nieuwe
+                // artikelen; betere scores en geleerde voorkeuren worden stil
+                // verwerkt bij de volgende verversing of als je terugkomt.
+                if order.isEmpty || applyAfterRefresh {
+                    applyAfterRefresh = false
                     applyOrder()
-                } else if liveOrder != unreadOrder {
-                    withAnimation(.snappy) { newOrderReady = true }
+                } else {
+                    let shown = Set(order)
+                    let count = liveOrder.filter { !shown.contains($0) }.count
+                    if count != newArticles { withAnimation(.snappy) { newArticles = count } }
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Terug na een tijdje weg: meteen de beste volgorde.
+                if phase == .active, Date.now.timeIntervalSince(orderAppliedAt) > 10 * 60 {
+                    applyAfterRefresh = store.isStale || store.isRefreshing
+                    applyOrder()
                 }
             }
             .onChange(of: store.settings.minRelevance) { applyOrder() }
             .onChange(of: store.preferences.influence) { applyOrder() }
-            .onChange(of: store.preferences.weights) {
-                if liveOrder != unreadOrder { withAnimation(.snappy) { newOrderReady = true } }
-            }
             .onChange(of: store.settings.engine) { applyOrder() }
             .searchable(text: $query, prompt: "Zoeken…")
             .navigationTitle("Newsticker")
@@ -194,7 +201,8 @@ struct ContentView: View {
                 _ = await notifications.requestPermission() // vraagt alleen de eerste keer
                 await store.scheduleBriefingNotification()
             }
-            if store.isStale { await store.refresh() } else { store.startScoring() }
+            // Verversen bij het openen: nieuwe artikelen meteen tonen, zonder knop.
+            if store.isStale { await store.refresh(); applyOrder() } else { store.startScoring() }
         }
     }
 
@@ -273,9 +281,16 @@ struct ContentView: View {
     }
 
     private var errorBanner: some View {
-        Text(store.lastError)
-            .font(.footnote)
-            .foregroundStyle(.red)
+        HStack(alignment: .top, spacing: 8) {
+            Text(store.lastError)
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Sluiten", systemImage: "xmark") { withAnimation { store.clearError() } }
+                .labelStyle(.iconOnly)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.red.opacity(0.7))
+        }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.red.opacity(0.08), in: .rect(cornerRadius: 10))
