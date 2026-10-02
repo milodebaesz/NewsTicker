@@ -4,11 +4,20 @@ import SwiftUI
 @main
 struct NewstickerApp: App {
     static let refreshTaskID = "com.mkdebie.newsticker.refresh"
+    static let scoringTaskID = "com.mkdebie.newsticker.scoring"
 
-    @State private var store = AppStore()
+    @State private var store = AppStore.shared
 
     init() {
         BriefingNotifications.shared.activate()
+        // Zware AI-taak: iOS kiest een rustig moment (scherm uit, vaak aan de lader).
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.scoringTaskID, using: nil) { task in
+            let work = Task { @MainActor in
+                await AppStore.shared.scoreBacklog()
+                task.setTaskCompleted(success: true)
+            }
+            task.expirationHandler = { work.cancel() }
+        }
     }
     @Environment(\.scenePhase) private var scenePhase
 
@@ -24,6 +33,7 @@ struct NewstickerApp: App {
                 Task { await store.refresh() }
             case .background:
                 scheduleAppRefresh()
+                scheduleScoring()
                 Task { await store.scheduleBriefingNotification() }
             default: break
             }
@@ -34,7 +44,16 @@ struct NewstickerApp: App {
             await store.refresh()
             await store.waitForScoring()
             await store.prepareBriefingIfDue()
+            await scheduleScoring()
         }
+    }
+
+    @MainActor private func scheduleScoring() {
+        guard store.hasScoringBacklog else { return }
+        let request = BGProcessingTaskRequest(identifier: Self.scoringTaskID)
+        request.requiresNetworkConnectivity = false
+        request.requiresExternalPower = false
+        try? BGTaskScheduler.shared.submit(request)
     }
 
     @MainActor private func scheduleAppRefresh() {

@@ -20,8 +20,8 @@ targets:
         CFBundleDevelopmentRegion: nl
         CFBundleLocalizations: [nl]
         UILaunchScreen: {}
-        UIBackgroundModes: [fetch]
-        BGTaskSchedulerPermittedIdentifiers: [com.mkdebie.newsticker.refresh]
+        UIBackgroundModes: [fetch, processing]
+        BGTaskSchedulerPermittedIdentifiers: [com.mkdebie.newsticker.refresh, com.mkdebie.newsticker.scoring]
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

@@ -5,6 +5,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.mkdebie.newsticker.refresh</string>
+		<string>com.mkdebie.newsticker.scoring</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>nl</string>
@@ -33,6 +34,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>processing</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

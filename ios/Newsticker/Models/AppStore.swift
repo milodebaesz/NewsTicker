@@ -4,6 +4,9 @@ import Observation
 // Centrale staat + ophaal/scoor-pijplijn (de iOS-tegenhanger van background.ts).
 @MainActor @Observable
 final class AppStore {
+    // Eén gedeelde instantie, ook voor de achtergrondtaken.
+    static let shared = AppStore()
+
     private static let maxItems = 500
     private static let maxAgeDays = 7.0
 
@@ -192,46 +195,94 @@ final class AppStore {
         }
     }
 
-    // Apple Intelligence: per artikel, een paar tegelijk, nieuwste eerst. Het
-    // scherm werkt na elk groepje bij, zodat de volgorde zichtbaar ‘inloopt’.
-    private func rescoreOnDevice() async -> String? {
+    // Apple Intelligence is zwaar voor de telefoon. In de app scoren we daarom
+    // alleen de nieuwste paar artikelen, één tegelijk en met lage prioriteit;
+    // de rest gebeurt in de achtergrondtaak (`scoreBacklog`) als iOS de
+    // telefoon rustig vindt.
+    static let foregroundScoreLimit = 12
+
+    private func rescoreOnDevice(limit: Int = AppStore.foregroundScoreLimit, maxAge: TimeInterval? = 48 * 3600) async -> String? {
         guard AppleScoring.isAvailable else { return nil }
+        prescoreMuted()
+        let cutoff = maxAge.map { Date.now.addingTimeInterval(-$0) } ?? .distantPast
         let unscored = items
-            .filter { $0.relevance == nil && !$0.dismissed }
+            .filter { $0.relevance == nil && !$0.dismissed && $0.publishedAt > cutoff }
             .sorted { $0.publishedAt > $1.publishedAt }
-            .prefix(60)
+            .prefix(limit)
+        guard !unscored.isEmpty else { return nil }
         scoringRemaining = unscored.count
-        defer { scoringRemaining = 0 }
+        defer {
+            scoringRemaining = 0
+            Persist.save(items, "items")
+        }
         let profile = profile
-        for chunk in stride(from: 0, to: unscored.count, by: 3).map({ Array(unscored.dropFirst($0).prefix(3)) }) {
-            let tasks = chunk.map { item in Task { (item, await AppleScoring.score(item, profile: profile)) } }
-            var scores: [String: Score] = [:]
-            var failure: String? // details staan in het logboek
-            for task in tasks {
-                let (item, outcome) = await task.value
-                switch outcome {
-                case .scored(let score):
-                    scores[item.id] = score
-                case .refused:
-                    // Neutraal tonen, en niet elke ronde opnieuw proberen.
-                    scores[item.id] = Score(relevance: 40, reason: "", topic: item.topic.isEmpty ? "Overig" : item.topic)
-                case .failed(let message):
-                    failure = message
-                }
+        var pending: [String: Score] = [:]
+        var failures = 0
+        for item in unscored {
+            if Task.isCancelled { break }
+            let outcome = await Task(priority: .utility) { await AppleScoring.score(item, profile: profile) }.value
+            switch outcome {
+            case .scored(let score):
+                pending[item.id] = score
+                failures = 0
+            case .refused:
+                // Neutraal tonen, en niet elke ronde opnieuw proberen.
+                pending[item.id] = Score(relevance: 40, reason: "", topic: item.topic.isEmpty ? "Overig" : item.topic)
+            case .failed:
+                failures += 1
             }
-            patch(scores) { item, s in
-                item.relevance = s.relevance
-                item.reason = s.reason
-                item.topic = s.topic
-            }
-            scoringRemaining -= chunk.count
-            // Werkt het model helemaal niet (en scoorde dit groepje niets), dan
-            // stoppen en de rest ongescoord laten voor een volgende ronde.
-            if failure != nil, scores.isEmpty {
+            scoringRemaining -= 1
+            // Per 4 artikelen bijwerken i.p.v. na elk artikel: minder herberekenen.
+            if pending.count >= 4 { applyScores(&pending) }
+            // Werkt het model niet (3× achter elkaar mis), dan stoppen en later opnieuw.
+            if failures >= 3 {
+                applyScores(&pending)
                 return "Apple Intelligence kon de artikelen nu niet beoordelen; bij de volgende verversing wordt het opnieuw geprobeerd."
             }
         }
+        applyScores(&pending)
         return nil
+    }
+
+    private func applyScores(_ pending: inout [String: Score]) {
+        patch(pending, save: false) { item, s in
+            item.relevance = s.relevance
+            item.reason = s.reason
+            item.topic = s.topic
+        }
+        pending = [:]
+    }
+
+    /// Artikelen met een woord van de negeerlijst krijgen meteen een lage
+    /// score, zonder het model te belasten.
+    private func prescoreMuted() {
+        let muted = profile.mute.map { $0.lowercased() }.filter { !$0.isEmpty }
+        guard !muted.isEmpty else { return }
+        var scores: [String: Score] = [:]
+        for item in items where item.relevance == nil && !item.dismissed {
+            let words = Set("\(item.title) \(item.topic)".lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+            if muted.contains(where: { words.contains($0) }) {
+                scores[item.id] = Score(relevance: 10, reason: "Op je negeerlijst", topic: item.topic.isEmpty ? "Overig" : item.topic)
+            }
+        }
+        patch(scores, save: false) { item, s in
+            item.relevance = s.relevance
+            item.reason = s.reason
+            item.topic = s.topic
+        }
+    }
+
+    /// Achtergrondtaak: de achterstand wegwerken terwijl je de telefoon niet gebruikt.
+    func scoreBacklog() async {
+        guard settings.engine == .apple else { return }
+        await scoringTask?.value // niet tegelijk met een lopende ronde
+        _ = await rescoreOnDevice(limit: 150, maxAge: nil)
+        feedVersion += 1
+    }
+
+    /// Zijn er nog ongescoorde artikelen voor de achtergrondtaak?
+    var hasScoringBacklog: Bool {
+        settings.engine == .apple && items.contains { $0.relevance == nil && !$0.dismissed }
     }
 
     // OpenAI: max 3 batches van 25 per ronde.
@@ -273,18 +324,18 @@ final class AppStore {
     func markRead(_ item: FeedItem) { patch([item.id: ()]) { i, _ in i.read = true } }
     func dismiss(_ item: FeedItem) { patch([item.id: ()]) { i, _ in i.dismissed = true } }
 
-    private func patch<V>(_ values: [String: V], _ apply: (inout FeedItem, V) -> Void) {
+    private func patch<V>(_ values: [String: V], save: Bool = true, _ apply: (inout FeedItem, V) -> Void) {
         guard !values.isEmpty else { return }
         setItems(items.map { item in
             guard let v = values[item.id] else { return item }
             var copy = item
             apply(&copy, v)
             return copy
-        })
+        }, save: save)
     }
 
-    private func setItems(_ next: [FeedItem]) {
+    private func setItems(_ next: [FeedItem], save: Bool = true) {
         items = next
-        Persist.save(items, "items")
+        if save { Persist.save(items, "items") }
     }
 }

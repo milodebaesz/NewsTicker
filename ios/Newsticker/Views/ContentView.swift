@@ -13,6 +13,9 @@ struct ContentView: View {
     // niet verspringen terwijl je leest of terwijl de AI nog aan het scoren is.
     @State private var order: [String] = []
     @State private var newOrderReady = false
+    // Verhaalindeling (zelfde nieuws, meerdere bronnen) bij de vaste volgorde;
+    // alleen opnieuw berekend als de volgorde verandert.
+    @State private var groups: [[String]] = []
 
     private var scoring: Bool { store.scoringActive }
 
@@ -41,8 +44,12 @@ struct ContentView: View {
     }
 
     private func applyOrder() {
+        let next = liveOrder
+        let byId = Dictionary(store.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let nextGroups = StoryClusters.group(next.compactMap { byId[$0] }).map { $0.all.map(\.id) }
         withAnimation(.snappy) {
-            order = liveOrder
+            order = next
+            groups = nextGroups
             newOrderReady = false
         }
     }
@@ -72,10 +79,24 @@ struct ContentView: View {
         preTopic.filter { topic.isEmpty || $0.topic == topic }
     }
 
+    // Verhalen in de vaste indeling, beperkt tot wat door de filters komt.
+    private var visibleStories: [StoryClusters.Story] {
+        let shown = visible
+        let allowed = Set(shown.map(\.id))
+        let byId = Dictionary(shown.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return groups.compactMap { ids in
+            let members = ids.filter(allowed.contains).compactMap { byId[$0] }
+            guard let lead = members.first else { return nil }
+            return StoryClusters.Story(lead: lead, others: Array(members.dropFirst()))
+        }
+    }
+
+    // Volgt de vaste volgorde, zodat de band niet steeds opnieuw begint.
     private var tickerItems: [FeedItem] {
-        store.items
+        let byId = Dictionary(store.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return order.lazy
+            .compactMap { byId[$0] }
             .filter { !$0.dismissed && !$0.read && !store.hiddenSources.contains($0.sourceLabel) }
-            .sorted { ($0.relevance ?? 0) > ($1.relevance ?? 0) }
             .prefix(20).map { $0 }
     }
 
@@ -93,13 +114,14 @@ struct ContentView: View {
                         if !topics.isEmpty { topicChips }
                         if store.scoringRemaining > 0 { scoringBanner }
                         if !store.lastError.isEmpty { errorBanner }
-                        BentoFeed(stories: StoryClusters.group(visible), open: open)
+                        BentoFeed(stories: visibleStories, open: open)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                         if visible.isEmpty { emptyState }
                     } header: {
                         if !tickerItems.isEmpty {
-                            TickerView(items: tickerItems) { open(StoryClusters.Story(lead: $0, others: [])) }
+                            TickerView(items: tickerItems, onTap: { open(StoryClusters.Story(lead: $0, others: [])) },
+                                       paused: reading != nil || showBriefing || showSettings || showAddSource)
                         }
                     }
                 }
