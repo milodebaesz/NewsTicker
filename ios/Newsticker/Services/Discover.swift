@@ -3,6 +3,10 @@ import Foundation
 struct FeedCandidate: Identifiable, Hashable, Sendable {
     var url: String
     var title: String
+    var detail = "" // korte omschrijving
+    var site = "" // domein, bv. nos.nl
+    var followers = 0 // aantal Feedly-volgers (0 = onbekend)
+    var icon = "" // icoon-URL, "" = favicon van het domein
     var id: String { url }
 }
 
@@ -36,7 +40,9 @@ enum Discover {
                   let href = attrs["href"], let abs = URL(string: href, relativeTo: url)?.absoluteString,
                   !seen.contains(abs) else { continue }
             seen.insert(abs)
-            candidates.append(FeedCandidate(url: abs, title: attrs["title"].flatMap { $0.isEmpty ? nil : $0 } ?? abs))
+            // Reactie-feeds (WordPress e.d.) zijn geen nieuws.
+            guard !isCommentsFeed(abs, title: attrs["title"] ?? "") else { continue }
+            candidates.append(FeedCandidate(url: abs, title: attrs["title"].map(HTMLText.strip).flatMap { $0.isEmpty ? nil : $0 } ?? abs))
         }
 
         if candidates.isEmpty {
@@ -49,7 +55,23 @@ enum Discover {
                 }
             }
         }
-        return candidates
+        return candidates.map { c in
+            var c = c
+            c.site = URL(string: c.url)?.host(percentEncoded: false)?.replacingOccurrences(of: "www.", with: "") ?? ""
+            return c
+        }
+    }
+
+    private static func isCommentsFeed(_ url: String, title: String) -> Bool {
+        url.range(of: #"/comments?/"#, options: [.regularExpression, .caseInsensitive]) != nil
+            || title.range(of: #"\b(comments|reacties)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// Vergelijkingssleutel voor feed-URL's: zonder schema, www en slash aan het eind.
+    static func key(_ url: String) -> String {
+        url.lowercased()
+            .replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
     }
 
     /// Titel van een feed of pagina, voor het voorvullen van het label.

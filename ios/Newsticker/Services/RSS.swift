@@ -211,6 +211,7 @@ enum HTMLText {
         "amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ",
         "hellip": "…", "mdash": "—", "ndash": "–", "lsquo": "‘", "rsquo": "’", "ldquo": "“", "rdquo": "”",
         "euro": "€", "eacute": "é", "euml": "ë", "iuml": "ï", "ouml": "ö", "uuml": "ü",
+        "raquo": "»", "laquo": "«", "middot": "·", "bull": "•",
     ]
 
     static func decodeEntities(_ s: String) -> String {

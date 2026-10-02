@@ -32,11 +32,40 @@ struct Source: Codable, Identifiable, Hashable, Sendable {
     ]
 }
 
+enum AIEngine: String, Codable, CaseIterable, Sendable {
+    case apple // Apple Intelligence, op het toestel
+    case openAI
+    case off
+
+    var label: String {
+        switch self {
+        case .apple: "Apple Intelligence"
+        case .openAI: "OpenAI"
+        case .off: "Uit"
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable, Sendable {
+    var engine = AIEngine.apple
     var model = "gpt-4o-mini"
     var refreshMinutes = 15
     var minRelevance = 40 // 0-100, items hieronder worden verborgen (alleen als scoring aan staat)
-    var scoringEnabled = true
+
+    init() {}
+
+    // Ontbrekende velden (oudere versie van de app) vallen terug op de standaard,
+    // zodat een update de instellingen niet wist.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AppSettings()
+        engine = try c.decodeIfPresent(AIEngine.self, forKey: .engine) ?? d.engine
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? d.model
+        refreshMinutes = try c.decodeIfPresent(Int.self, forKey: .refreshMinutes) ?? d.refreshMinutes
+        // De oude schuifregelaar kon elke waarde geven; afronden naar de vaste niveaus.
+        let min = try c.decodeIfPresent(Int.self, forKey: .minRelevance) ?? d.minRelevance
+        minRelevance = [90, 70, 40, 0].first { min >= $0 } ?? 0
+    }
 }
 
 struct InterestProfile: Codable, Equatable, Sendable {

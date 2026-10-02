@@ -25,29 +25,45 @@ struct SettingsView: View {
                 } header: {
                     Text("Interesseprofiel")
                 } footer: {
-                    Text("Trefwoorden en negeerlijst scheiden met komma's. Het profiel bepaalt de relevantiescore (0–100).")
+                    Text("Trefwoorden en negeerlijst scheiden met komma's. Het profiel bepaalt hoe relevant een artikel voor je is.")
                 }
 
                 Section {
-                    Toggle("AI-relevantiescore", isOn: $store.settings.scoringEnabled)
-                    SecureField("OpenAI API-key", text: $store.openAIKey)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    TextField("Model", text: $store.settings.model)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    VStack(alignment: .leading) {
-                        LabeledContent("Minimale relevantie", value: "\(store.settings.minRelevance)")
-                        Slider(value: Binding(
-                            get: { Double(store.settings.minRelevance) },
-                            set: { store.settings.minRelevance = Int($0) }
-                        ), in: 0...100, step: 5)
+                    Picker("AI", selection: $store.settings.engine) {
+                        ForEach(AIEngine.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    if store.settings.engine == .openAI {
+                        SecureField("OpenAI API-key", text: $store.openAIKey)
+                            .textContentType(.password)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        TextField("Model", text: $store.settings.model)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                    }
+                    if store.settings.engine != .off {
+                        Picker("Toon", selection: $store.settings.minRelevance) {
+                            Text("Alles").tag(0)
+                            Text("Ook een beetje relevant").tag(40)
+                            Text("Relevant en hoger").tag(70)
+                            Text("Alleen zeer relevant").tag(90)
+                        }
                     }
                 } header: {
-                    Text("Scoring")
+                    Text("Relevantie")
                 } footer: {
-                    Text("De key staat alleen in de Keychain van dit apparaat. Alleen titel, bron en een korte samenvatting worden naar OpenAI gestuurd.")
+                    switch store.settings.engine {
+                    case .apple:
+                        if case .unavailable(let reason) = AppleScoring.status {
+                            Text(reason).foregroundStyle(.orange)
+                        } else {
+                            Text("Draait volledig op je iPhone: gratis, zonder key, en er gaat niets naar een server.")
+                        }
+                    case .openAI:
+                        Text("De key staat alleen in de Keychain van dit apparaat. Alleen titel, bron en een korte samenvatting worden naar OpenAI gestuurd.")
+                    case .off:
+                        Text("Nieuws wordt op tijd gesorteerd, zonder relevantiescore.")
+                    }
                 }
 
                 Section {
@@ -66,8 +82,9 @@ struct SettingsView: View {
                 }
             }
             .onChange(of: store.profile) { profileChanged = true }
+            .onChange(of: store.settings.engine) { profileChanged = true }
             .onDisappear {
-                // Nieuw profiel → bestaande scores zijn niet meer representatief.
+                // Nieuw profiel of andere AI → bestaande scores zijn niet meer representatief.
                 if profileChanged {
                     store.resetScores()
                     Task { await store.refresh() }
@@ -114,86 +131,6 @@ struct SourcesView: View {
             EditButton()
             Button("Toevoegen", systemImage: "plus") { showFinder = true }
         }
-        .sheet(isPresented: $showFinder) { FeedFinderView() }
-    }
-}
-
-// Zoekt feeds bij een website-URL en voegt ze als bron toe.
-struct FeedFinderView: View {
-    @Environment(AppStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    @State private var input = ""
-    @State private var searching = false
-    @State private var results: [FeedCandidate] = []
-    @State private var error = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    TextField("Website of feed-URL, bv. nos.nl", text: $input)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onSubmit(search)
-                    Button(action: search) {
-                        HStack {
-                            Text("Feeds zoeken")
-                            if searching { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || searching)
-                } footer: {
-                    if !error.isEmpty { Text(error).foregroundStyle(.red) }
-                }
-
-                if !results.isEmpty {
-                    Section("Gevonden") {
-                        ForEach(results) { c in
-                            let added = store.sources.contains { $0.url == c.url }
-                            Button { add(c) } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(c.title).foregroundStyle(.primary)
-                                        Text(c.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                    Spacer()
-                                    Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
-                                }
-                            }
-                            .disabled(added)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Bron toevoegen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Klaar") { dismiss() } }
-            }
-        }
-    }
-
-    private func search() {
-        let q = input
-        searching = true
-        error = ""
-        results = []
-        Task {
-            do {
-                results = try await Discover.feeds(for: q)
-                if results.isEmpty { error = "Geen feeds gevonden op deze site." }
-            } catch {
-                self.error = "Kon de site niet laden: \(error.localizedDescription)"
-            }
-            searching = false
-        }
-    }
-
-    private func add(_ c: FeedCandidate) {
-        let host = URL(string: c.url)?.host(percentEncoded: false)?.replacingOccurrences(of: "www.", with: "") ?? c.url
-        let label = c.title == c.url ? host : c.title
-        store.sources.append(Source(id: UUID().uuidString, url: c.url, label: label, enabled: true))
-        Task { await store.refresh() }
+        .sheet(isPresented: $showFinder) { AddSourceView() }
     }
 }

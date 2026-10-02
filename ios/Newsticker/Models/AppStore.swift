@@ -11,6 +11,7 @@ final class AppStore {
     private(set) var lastRefresh: Date? = Persist.load(Date.self, "lastRefresh")
     private(set) var lastError = ""
     private(set) var isRefreshing = false
+    private(set) var scoringRemaining = 0 // nog te scoren artikelen in deze ronde
 
     var sources: [Source] = Persist.load([Source].self, "sources") ?? Source.defaults {
         didSet { Persist.save(sources, "sources") }
@@ -29,28 +30,61 @@ final class AppStore {
         didSet { Keychain.set(openAIKey, for: "openaiKey") }
     }
 
+    /// Wordt er op dit moment met AI gescoord/gesorteerd?
+    var scoringActive: Bool {
+        switch settings.engine {
+        case .apple: AppleScoring.isAvailable
+        case .openAI: !openAIKey.isEmpty
+        case .off: false
+        }
+    }
+
     var isStale: Bool {
-        guard let lastRefresh else { return true }
+        guard let lastRefresh, !items.isEmpty else { return true }
         return Date.now.timeIntervalSince(lastRefresh) > Double(max(5, settings.refreshMinutes)) * 60
     }
 
     // MARK: - Pijplijn
 
+    /// Haalt alle bronnen op. Het scoren loopt daarna los op de achtergrond
+    /// verder (zie `scoringTask`), zodat verversen snel klaar is.
     func refresh() async {
         guard !isRefreshing else { return }
         isRefreshing = true
-        defer { isRefreshing = false }
 
-        var (collected, errors) = await Self.fetchAll(sources.filter(\.enabled))
+        let (collected, errors) = await Self.fetchAll(sources.filter(\.enabled))
 
         upsert(collected)
         await backfillImages()
-        if let scoreError = await rescore() { errors.append(scoreError) }
         pruneOld()
 
         lastRefresh = .now
         lastError = errors.joined(separator: " · ")
         Persist.save(lastRefresh, "lastRefresh")
+        isRefreshing = false
+        feedVersion += 1
+        startScoring()
+    }
+
+    /// Verhoogd zodra er nieuwe items of nieuwe scores zijn; de feed gebruikt
+    /// dit om een nieuwe volgorde aan te bieden.
+    private(set) var feedVersion = 0
+    private var scoringTask: Task<Void, Never>?
+
+    func startScoring() {
+        guard scoringTask == nil else { return }
+        scoringTask = Task {
+            if let error = await rescore() {
+                lastError = [lastError, error].filter { !$0.isEmpty }.joined(separator: " · ")
+            }
+            scoringTask = nil
+            feedVersion += 1
+        }
+    }
+
+    /// Voor de achtergrondtaak: wacht tot ook het scoren klaar is.
+    func waitForScoring() async {
+        await scoringTask?.value
     }
 
     // Voegt nieuwe items toe en behoudt de lees-/verberg-/score-status van
@@ -110,9 +144,60 @@ final class AppStore {
         return found
     }
 
-    // Scoort items die nog geen relevantie hebben (max 3 batches per ronde).
+    // Scoort items die nog geen relevantie hebben.
     private func rescore() async -> String? {
-        guard settings.scoringEnabled, !openAIKey.isEmpty else { return nil }
+        switch settings.engine {
+        case .off: return nil
+        case .apple: return await rescoreOnDevice()
+        case .openAI: return await rescoreOpenAI()
+        }
+    }
+
+    // Apple Intelligence: per artikel, een paar tegelijk, nieuwste eerst. Het
+    // scherm werkt na elk groepje bij, zodat de volgorde zichtbaar ‘inloopt’.
+    private func rescoreOnDevice() async -> String? {
+        guard AppleScoring.isAvailable else { return nil }
+        let unscored = items
+            .filter { $0.relevance == nil && !$0.dismissed }
+            .sorted { $0.publishedAt > $1.publishedAt }
+            .prefix(60)
+        scoringRemaining = unscored.count
+        defer { scoringRemaining = 0 }
+        let profile = profile
+        for chunk in stride(from: 0, to: unscored.count, by: 3).map({ Array(unscored.dropFirst($0).prefix(3)) }) {
+            let tasks = chunk.map { item in Task { (item, await AppleScoring.score(item, profile: profile)) } }
+            var scores: [String: Score] = [:]
+            var failure: String? // details staan in het logboek
+            for task in tasks {
+                let (item, outcome) = await task.value
+                switch outcome {
+                case .scored(let score):
+                    scores[item.id] = score
+                case .refused:
+                    // Neutraal tonen, en niet elke ronde opnieuw proberen.
+                    scores[item.id] = Score(relevance: 40, reason: "", topic: item.topic.isEmpty ? "Overig" : item.topic)
+                case .failed(let message):
+                    failure = message
+                }
+            }
+            patch(scores) { item, s in
+                item.relevance = s.relevance
+                item.reason = s.reason
+                item.topic = s.topic
+            }
+            scoringRemaining -= chunk.count
+            // Werkt het model helemaal niet (en scoorde dit groepje niets), dan
+            // stoppen en de rest ongescoord laten voor een volgende ronde.
+            if failure != nil, scores.isEmpty {
+                return "Apple Intelligence kon de artikelen nu niet beoordelen; bij de volgende verversing wordt het opnieuw geprobeerd."
+            }
+        }
+        return nil
+    }
+
+    // OpenAI: max 3 batches van 25 per ronde.
+    private func rescoreOpenAI() async -> String? {
+        guard !openAIKey.isEmpty else { return nil }
         var unscored = items.filter { $0.relevance == nil && !$0.dismissed }
         for _ in 0..<3 where !unscored.isEmpty {
             let batch = Array(unscored.prefix(25))

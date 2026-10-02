@@ -81,6 +81,17 @@ struct FeedCard: View {
             .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.line.opacity(0.7)) }
             .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
             .contentShape(.rect(cornerRadius: 18))
+            // Gelezen: blijft staan tot de volgende verversing, maar gedimd.
+            .opacity(item.read ? 0.45 : 1)
+            .overlay(alignment: .topTrailing) {
+                if item.read {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, Theme.brand)
+                        .padding(10)
+                }
+            }
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -192,8 +203,10 @@ struct FeedCard: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("\(item.sourceLabel) · \(item.publishedAt.timeAgo)").font(.caption).foregroundStyle(Theme.brand)
-                Text(item.title).font(.headline)
-                if !item.summary.isEmpty { Text(item.summary).font(.subheadline).foregroundStyle(.secondary) }
+                Text(item.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+                if !item.summary.isEmpty {
+                    Text(item.summary).font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
                 if !item.reason.isEmpty { Text(item.reason).font(.caption.italic()).foregroundStyle(.secondary) }
             }
             .padding(14)

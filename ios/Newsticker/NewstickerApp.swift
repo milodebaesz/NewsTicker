@@ -27,6 +27,7 @@ struct NewstickerApp: App {
         .backgroundTask(.appRefresh(Self.refreshTaskID)) {
             await scheduleAppRefresh()
             await store.refresh()
+            await store.waitForScoring()
         }
     }
 

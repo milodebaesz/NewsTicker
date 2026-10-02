@@ -5,17 +5,54 @@ struct ContentView: View {
     @State private var query = ""
     @State private var topic = ""
     @State private var showSettings = false
+    @State private var showAddSource = false
     @State private var reading: FeedItem?
+    // De volgorde van de feed ligt vast tot je hem zelf ververst, zodat kaarten
+    // niet verspringen terwijl je leest of terwijl de AI nog aan het scoren is.
+    @State private var order: [String] = []
+    @State private var newOrderReady = false
 
-    private var scoring: Bool { store.settings.scoringEnabled && !store.openAIKey.isEmpty }
+    private var scoring: Bool { store.scoringActive }
 
-    // Items die door bron-filter, zoekterm en relevantiedrempel komen
+    // Gewenste volgorde op dit moment: drempel + sortering, zonder gelezen items.
+    private var liveOrder: [String] {
+        store.items
+            .filter { i in
+                if i.dismissed || i.read { return false }
+                if scoring, let r = i.relevance, r < store.settings.minRelevance { return false }
+                return true
+            }
+            .sorted { a, b in
+                // op relevantie als scoring aan staat (nog niet gescoord telt als
+                // middelmatig), anders nieuwste eerst
+                let ra = a.relevance ?? 55, rb = b.relevance ?? 55
+                if scoring && ra != rb { return ra > rb }
+                return a.publishedAt > b.publishedAt
+            }
+            .map(\.id)
+    }
+
+    // De getoonde volgorde zonder intussen gelezen of verborgen items.
+    private var unreadOrder: [String] {
+        let unread = Set(store.items.filter { !$0.read && !$0.dismissed }.map(\.id))
+        return order.filter(unread.contains)
+    }
+
+    private func applyOrder() {
+        withAnimation(.snappy) {
+            order = liveOrder
+            newOrderReady = false
+        }
+    }
+
+    // Items in de vastgezette volgorde die door bron-filter en zoekterm komen
     // (nog vóór het onderwerp-filter, zodat de chips de juiste opties tonen).
+    // Gelezen items blijven (gedimd) staan tot de volgende verversing.
     private var preTopic: [FeedItem] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return store.items.filter { i in
-            if i.dismissed || i.read || store.hiddenSources.contains(i.sourceLabel) { return false }
-            if scoring, let r = i.relevance, r < store.settings.minRelevance { return false }
+        let byId = Dictionary(store.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return order.compactMap { byId[$0] }.filter { i in
+            if i.dismissed || store.hiddenSources.contains(i.sourceLabel) { return false }
             if !q.isEmpty {
                 return "\(i.title) \(i.summary) \(i.sourceLabel) \(i.topic)".lowercased().contains(q)
             }
@@ -30,14 +67,7 @@ struct ContentView: View {
     }
 
     private var visible: [FeedItem] {
-        preTopic
-            .filter { topic.isEmpty || $0.topic == topic }
-            .sorted { a, b in
-                // op relevantie als scoring aan staat, anders nieuwste eerst
-                let ra = a.relevance ?? -1, rb = b.relevance ?? -1
-                if scoring && ra != rb { return ra > rb }
-                return a.publishedAt > b.publishedAt
-            }
+        preTopic.filter { topic.isEmpty || $0.topic == topic }
     }
 
     private var tickerItems: [FeedItem] {
@@ -59,6 +89,7 @@ struct ContentView: View {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section {
                         if !topics.isEmpty { topicChips }
+                        if store.scoringRemaining > 0 { scoringBanner }
                         if !store.lastError.isEmpty { errorBanner }
                         BentoFeed(items: visible, open: open)
                             .padding(.horizontal, 16)
@@ -70,10 +101,37 @@ struct ContentView: View {
                 }
             }
             .background(Theme.canvas)
-            .refreshable { await store.refresh() }
+            .refreshable {
+                await store.refresh()
+                applyOrder()
+            }
+            .overlay(alignment: .top) {
+                if newOrderReady {
+                    Button { applyOrder() } label: {
+                        Label("Nieuwe volgorde — tik om bij te werken", systemImage: "arrow.up")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(Theme.brand)
+                    .padding(.top, 52)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .onChange(of: store.feedVersion) {
+                // Eerste keer meteen tonen; daarna alleen aanbieden.
+                if order.isEmpty {
+                    applyOrder()
+                } else if liveOrder != unreadOrder {
+                    withAnimation(.snappy) { newOrderReady = true }
+                }
+            }
+            .onChange(of: store.settings.minRelevance) { applyOrder() }
+            .onChange(of: store.settings.engine) { applyOrder() }
             .searchable(text: $query, prompt: "Zoeken…")
             .navigationTitle("Newsticker")
-            .modifier(Subtitle(text: subtitle))
+            .navigationSubtitle(subtitle)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { statusLabel }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -86,8 +144,12 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showAddSource) { AddSourceView() }
         .sheet(item: $reading) { SafariView(url: URL(string: $0.url)!).ignoresSafeArea() }
-        .task { if store.isStale { await store.refresh() } }
+        .task {
+            applyOrder()
+            if store.isStale { await store.refresh() } else { store.startScoring() }
+        }
     }
 
     private func open(_ item: FeedItem) {
@@ -101,9 +163,27 @@ struct ContentView: View {
             if store.isRefreshing {
                 ProgressView().controlSize(.small)
             } else {
-                Button("Verversen", systemImage: "arrow.clockwise") { Task { await store.refresh() } }
+                Button("Verversen", systemImage: "arrow.clockwise") {
+                    Task {
+                        await store.refresh()
+                        applyOrder()
+                    }
+                }
             }
         }
+    }
+
+    private var scoringBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(store.settings.engine == .apple
+                 ? "Apple Intelligence beoordeelt \(store.scoringRemaining) nieuwe artikelen…"
+                 : "\(store.scoringRemaining) nieuwe artikelen worden beoordeeld…")
+                .font(.footnote)
+                .foregroundStyle(Theme.muted)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
     }
 
     private var subtitle: String {
@@ -114,6 +194,7 @@ struct ContentView: View {
 
     private var sourceMenu: some View {
         Menu {
+            Button("Bron toevoegen…", systemImage: "plus") { showAddSource = true }
             Section("Toon bronnen") {
                 Button("Alles") { store.hiddenSources = [] }
                 Button("Geen") { store.hiddenSources = Set(sourceLabels) }
@@ -163,8 +244,9 @@ struct ContentView: View {
             if !query.isEmpty || !topic.isEmpty {
                 Button("Filters wissen") { query = ""; topic = "" }
             } else {
-                Text("Trek omlaag om te verversen, of voeg bronnen toe via instellingen.")
+                Text("Trek omlaag om te verversen, of voeg een bron toe.")
                     .font(.footnote).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+                Button("Bron toevoegen", systemImage: "plus") { showAddSource = true }
             }
         }
         .frame(maxWidth: .infinity)
@@ -193,12 +275,5 @@ private struct Chip: View {
             .overlay { if !selected { Capsule().strokeBorder(Theme.line) } }
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct Subtitle: ViewModifier {
-    let text: String
-    func body(content: Content) -> some View {
-        if #available(iOS 26, *) { content.navigationSubtitle(text) } else { content }
     }
 }
