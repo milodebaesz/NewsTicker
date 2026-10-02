@@ -51,6 +51,8 @@ struct AppSettings: Codable, Equatable, Sendable {
     var model = "gpt-4o-mini"
     var refreshMinutes = 15
     var minRelevance = 40 // 0-100, items hieronder worden verborgen (alleen als scoring aan staat)
+    var briefingEnabled = false
+    var briefingMinutes = 7 * 60 + 30 // tijd van de ochtendbriefing, minuten na middernacht
 
     init() {}
 
@@ -65,6 +67,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         // De oude schuifregelaar kon elke waarde geven; afronden naar de vaste niveaus.
         let min = try c.decodeIfPresent(Int.self, forKey: .minRelevance) ?? d.minRelevance
         minRelevance = [90, 70, 40, 0].first { min >= $0 } ?? 0
+        briefingEnabled = try c.decodeIfPresent(Bool.self, forKey: .briefingEnabled) ?? d.briefingEnabled
+        briefingMinutes = try c.decodeIfPresent(Int.self, forKey: .briefingMinutes) ?? d.briefingMinutes
     }
 }
 

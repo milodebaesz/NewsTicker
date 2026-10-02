@@ -10,6 +10,27 @@ enum Summarizer {
 
     static var isAvailable: Bool { AppleScoring.isAvailable }
 
+    /// Eén korte zin bij een verhaal voor de briefing, op basis van de koppen en
+    /// feed-samenvattingen (snel genoeg voor de achtergrond). Nil als het niet lukt.
+    static func oneLine(_ story: StoryClusters.Story) async -> String? {
+        guard isAvailable else { return nil }
+        let session = LanguageModelSession(model: model, instructions: """
+        Je schrijft voor een ochtendbriefing in het Nederlands.
+        Geef in één korte zin (maximaal 20 woorden) de kern van het nieuws. Herhaal de kop niet letterlijk.
+        Voeg niets toe dat niet in de tekst staat. Geen inleiding, geen aanhalingstekens.
+        """)
+        let text = story.all
+            .map { "\($0.sourceLabel): \($0.title)\n\($0.summary.prefix(300))" }
+            .joined(separator: "\n\n")
+        do {
+            let line = try await session.respond(to: text).content
+                .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"“”")))
+            return line.isEmpty ? nil : line
+        } catch {
+            return nil
+        }
+    }
+
     /// `texts`: per bron de titel plus (indien bekend) de artikeltekst.
     static func summarize(_ texts: [(source: String, text: String)]) async throws -> String {
         let session = LanguageModelSession(model: model, instructions: """

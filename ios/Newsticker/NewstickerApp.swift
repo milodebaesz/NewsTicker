@@ -6,6 +6,10 @@ struct NewstickerApp: App {
     static let refreshTaskID = "com.mkdebie.newsticker.refresh"
 
     @State private var store = AppStore()
+
+    init() {
+        BriefingNotifications.shared.activate()
+    }
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -20,6 +24,7 @@ struct NewstickerApp: App {
                 Task { await store.refresh() }
             case .background:
                 scheduleAppRefresh()
+                Task { await store.scheduleBriefingNotification() }
             default: break
             }
         }
@@ -28,12 +33,19 @@ struct NewstickerApp: App {
             await scheduleAppRefresh()
             await store.refresh()
             await store.waitForScoring()
+            await store.prepareBriefingIfDue()
         }
     }
 
     @MainActor private func scheduleAppRefresh() {
         let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
-        request.earliestBeginDate = .now.addingTimeInterval(Double(max(15, store.settings.refreshMinutes)) * 60)
+        var earliest = Date.now.addingTimeInterval(Double(max(15, store.settings.refreshMinutes)) * 60)
+        // Ruim vóór de briefing verversen, zodat die met vers nieuws klaarstaat.
+        if store.settings.briefingEnabled {
+            let prep = BriefingNotifications.nextDate(minutes: store.settings.briefingMinutes).addingTimeInterval(-75 * 60)
+            if prep > .now { earliest = min(earliest, prep) }
+        }
+        request.earliestBeginDate = earliest
         try? BGTaskScheduler.shared.submit(request)
     }
 }

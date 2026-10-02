@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var profileChanged = false
+    @State private var notificationsDenied = false
 
     var body: some View {
         @Bindable var store = store
@@ -67,6 +68,34 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Ochtendbriefing", isOn: Binding(
+                        get: { store.settings.briefingEnabled },
+                        set: { on in
+                            store.settings.briefingEnabled = on
+                            if on { Task { notificationsDenied = !(await BriefingNotifications.shared.requestPermission()) } }
+                        }
+                    ))
+                    if store.settings.briefingEnabled {
+                        DatePicker("Tijd", selection: Binding(
+                            get: { Calendar.current.date(bySettingHour: store.settings.briefingMinutes / 60, minute: store.settings.briefingMinutes % 60, second: 0, of: .now) ?? .now },
+                            set: { d in
+                                let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                                store.settings.briefingMinutes = (c.hour ?? 7) * 60 + (c.minute ?? 30)
+                            }
+                        ), displayedComponents: .hourAndMinute)
+                    }
+                } header: {
+                    Text("Briefing")
+                } footer: {
+                    if notificationsDenied {
+                        Text("Meldingen staan uit voor Newsticker. Zet ze aan in Instellingen › Meldingen om de briefing te ontvangen.")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Elke ochtend een melding met de vijf belangrijkste verhalen voor jou, elk met één zin uitleg. Je kunt de briefing ook altijd openen met de zon bovenaan.")
+                    }
+                }
+
+                Section {
                     Stepper("Elke \(store.settings.refreshMinutes) min", value: $store.settings.refreshMinutes, in: 15...240, step: 15)
                 } header: {
                     Text("Verversen")
@@ -84,6 +113,7 @@ struct SettingsView: View {
             .onChange(of: store.profile) { profileChanged = true }
             .onChange(of: store.settings.engine) { profileChanged = true }
             .onDisappear {
+                Task { await store.scheduleBriefingNotification() }
                 // Nieuw profiel of andere AI → bestaande scores zijn niet meer representatief.
                 if profileChanged {
                     store.resetScores()

@@ -6,6 +6,8 @@ struct ContentView: View {
     @State private var topic = ""
     @State private var showSettings = false
     @State private var showAddSource = false
+    @State private var showBriefing = false
+    private let notifications = BriefingNotifications.shared
     @State private var reading: StoryClusters.Story?
     // De volgorde van de feed ligt vast tot je hem zelf ververst, zodat kaarten
     // niet verspringen terwijl je leest of terwijl de AI nog aan het scoren is.
@@ -137,6 +139,7 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { statusLabel }
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Briefing", systemImage: "sun.horizon") { showBriefing = true }
                     sourceMenu
                     Button("Instellingen", systemImage: "gearshape") { showSettings = true }
                 }
@@ -147,9 +150,23 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAddSource) { AddSourceView() }
+        .sheet(isPresented: $showBriefing) { BriefingView() }
+        // Getikt op de briefingmelding.
+        .onChange(of: notifications.openRequested, initial: true) {
+            guard notifications.openRequested else { return }
+            notifications.openRequested = false
+            reading = nil
+            showSettings = false
+            showAddSource = false
+            showBriefing = true
+        }
         .sheet(item: $reading) { ReaderView(story: $0) }
         .task {
             applyOrder()
+            if store.settings.briefingEnabled {
+                _ = await notifications.requestPermission() // vraagt alleen de eerste keer
+                await store.scheduleBriefingNotification()
+            }
             if store.isStale { await store.refresh() } else { store.startScoring() }
         }
     }

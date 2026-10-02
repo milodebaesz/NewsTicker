@@ -39,6 +39,45 @@ final class AppStore {
         }
     }
 
+    // MARK: - Ochtendbriefing
+
+    private(set) var briefing: Briefing? = Persist.load(Briefing.self, "briefing")
+    private(set) var isBuildingBriefing = false
+
+    /// Stelt de briefing opnieuw samen uit de huidige artikelen.
+    func buildBriefing() async {
+        guard !isBuildingBriefing else { return }
+        isBuildingBriefing = true
+        defer { isBuildingBriefing = false }
+        let stories = BriefingBuilder.pickStories(from: items, hiddenSources: hiddenSources)
+        let built = await BriefingBuilder.build(stories: stories)
+        briefing = built
+        Persist.save(built, "briefing")
+    }
+
+    /// Voor de achtergrondtaak: is het (bijna) tijd voor de briefing en is die
+    /// vandaag nog niet gemaakt, stel hem dan samen en zet hem in de melding.
+    func prepareBriefingIfDue() async {
+        guard settings.briefingEnabled else { return }
+        let dueSoon = BriefingNotifications.nextDate(minutes: settings.briefingMinutes).timeIntervalSinceNow < 3 * 3600
+        guard dueSoon, !briefingIsForNextSlot else { return }
+        await buildBriefing()
+        await scheduleBriefingNotification()
+    }
+
+    /// Is de bewaarde briefing gemaakt in de 3 uur vóór het volgende moment?
+    private var briefingIsForNextSlot: Bool {
+        guard let briefing else { return false }
+        let gap = BriefingNotifications.nextDate(minutes: settings.briefingMinutes).timeIntervalSince(briefing.createdAt)
+        return gap > 0 && gap < 3 * 3600
+    }
+
+    /// Zet de melding voor het volgende moment: met koppen als de briefing al
+    /// klaar is, anders met een algemene tekst.
+    func scheduleBriefingNotification() async {
+        await BriefingNotifications.shared.schedule(settings: settings, briefing: briefingIsForNextSlot ? briefing : nil)
+    }
+
     var isStale: Bool {
         guard let lastRefresh, !items.isEmpty else { return true }
         return Date.now.timeIntervalSince(lastRefresh) > Double(max(5, settings.refreshMinutes)) * 60
