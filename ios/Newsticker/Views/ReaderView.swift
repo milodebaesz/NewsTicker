@@ -250,7 +250,7 @@ private struct SourceIcon: View {
     let host: String
 
     var body: some View {
-        AsyncImage(url: host.isEmpty ? nil : URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")) { phase in
+        AsyncImage(url: Favicon.url(host: host)) { phase in
             if case .success(let img) = phase {
                 img.resizable().scaledToFit()
             } else {

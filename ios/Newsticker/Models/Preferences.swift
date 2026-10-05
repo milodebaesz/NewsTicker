@@ -88,7 +88,7 @@ struct LearnedPreferences: Codable, Sendable {
         weights
             .filter { key, value in
                 let isPlainWord = key.hasPrefix("\(Kind.word.rawValue):") && key.lowercased() == key && !key.contains(" ")
-                let threshold = isPlainWord ? 1.5 : 0.9
+                let threshold = isPlainWord ? 3.0 : 0.9
                 return liked ? value >= threshold : value <= -threshold
             }
             .sorted { liked ? $0.value > $1.value : $0.value < $1.value }

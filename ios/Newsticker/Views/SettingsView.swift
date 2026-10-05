@@ -109,6 +109,17 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Link(destination: URL(string: "https://milodebaesz.github.io/NewsTicker/privacy.html")!) {
+                        Label("Privacybeleid", systemImage: "hand.raised")
+                    }
+                    Link(destination: URL(string: "https://milodebaesz.github.io/NewsTicker/")!) {
+                        Label("Hulp en contact", systemImage: "questionmark.circle")
+                    }
+                } footer: {
+                    Text("Newsticker \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") · geen account, geen tracking. Alles blijft op je iPhone.")
+                }
+
+                Section {
                     Stepper("Elke \(store.settings.refreshMinutes) min", value: $store.settings.refreshMinutes, in: 15...240, step: 15)
                 } header: {
                     Text("Verversen")

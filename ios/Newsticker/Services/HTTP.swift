@@ -37,6 +37,14 @@ enum HTTP {
     }
 }
 
+// Logo van een site, rechtstreeks bij de site zelf (geen externe icoondienst,
+// zodat niemand anders ziet welke bronnen je volgt).
+enum Favicon {
+    static func url(host: String) -> URL? {
+        host.isEmpty ? nil : URL(string: "https://\(host)/favicon.ico")
+    }
+}
+
 // Haalt de og:image van de artikelpagina op voor items zonder feed-afbeelding.
 enum OGImage {
     static func fetch(_ urlString: String) async -> String {

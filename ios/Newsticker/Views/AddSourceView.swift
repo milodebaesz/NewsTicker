@@ -156,7 +156,7 @@ private struct FeedRow: View {
     private var iconURL: URL? {
         if !candidate.icon.isEmpty { return URL(string: candidate.icon) }
         let host = candidate.site.isEmpty ? URL(string: candidate.url)?.host(percentEncoded: false) ?? "" : candidate.site
-        return host.isEmpty ? nil : URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")
+        return Favicon.url(host: host)
     }
 
     var body: some View {

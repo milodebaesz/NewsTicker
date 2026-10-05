@@ -7,6 +7,9 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showAddSource = false
     @State private var showBriefing = false
+    #if DEBUG
+    @State private var showAlgorithm = false
+    #endif
     private let notifications = BriefingNotifications.shared
     @State private var reading: StoryClusters.Story?
     // De volgorde van de feed ligt vast tot je hem zelf ververst, zodat kaarten
@@ -214,6 +217,10 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAddSource) { AddSourceView() }
         .sheet(isPresented: $showBriefing) { BriefingView() }
+        #if DEBUG
+        .sheet(isPresented: $showAlgorithm) { NavigationStack { AlgorithmView() } }
+        .task { await openScreenForScreenshot() }
+        #endif
         .fullScreenCover(isPresented: Binding(get: { store.needsOnboarding }, set: { _ in })) {
             OnboardingView()
         }
@@ -388,3 +395,36 @@ private struct Chip: View {
         .buttonStyle(.plain)
     }
 }
+
+#if DEBUG
+// Alleen voor App Store-screenshots: `-NTScreenshot feed|reader|briefing|algorithm|onboarding`
+// bij het opstarten opent direct dat scherm. Niet in de App Store-versie.
+extension ContentView {
+    fileprivate func openScreenForScreenshot() async {
+        guard let i = CommandLine.arguments.firstIndex(of: "-NTScreenshot"),
+              CommandLine.arguments.indices.contains(i + 1) else { return }
+        let screen = CommandLine.arguments[i + 1]
+        if screen == "onboarding" { store.restartOnboarding(); return }
+        // Wachten tot de feed gevuld is.
+        for _ in 0..<60 where visibleStories.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
+        switch screen {
+        case "reader":
+            reading = visibleStories.first { !$0.others.isEmpty } ?? visibleStories.first
+        case "briefing":
+            showBriefing = true
+        case "algorithm":
+            // Voorbeeldprofiel voor de screenshot.
+            if store.preferences.isEmpty {
+                store.preferences.weights = [
+                    "onderwerp:Tech & AI": 7, "onderwerp:Wetenschap": 4.5, "bron:Tweakers": 3,
+                    "woord:Apple": 3.5, "woord:Verstappen": 2.5, "woord:kunstmatige": 3.2,
+                    "onderwerp:Voetbal": -6, "onderwerp:Showbizz": -3.5, "woord:Champions League": -2,
+                ]
+            }
+            showAlgorithm = true
+        default:
+            break
+        }
+    }
+}
+#endif
