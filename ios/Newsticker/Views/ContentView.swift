@@ -24,21 +24,41 @@ struct ContentView: View {
 
     // Gewenste volgorde op dit moment: drempel + sortering, zonder gelezen items.
     private var liveOrder: [String] {
-        // Rangscore = AI-relevantie + wat de app van je geleerd heeft; bij
-        // gelijke stand nieuwste eerst.
         let minimum = Double(store.settings.minRelevance)
-        var ranked: [(item: FeedItem, rank: Double)] = []
+        var candidates: [(item: FeedItem, rank: Double)] = []
         for item in store.items where !item.dismissed && !item.read {
-            let rank = store.rank(item)
             // Drempel alleen op gescoorde artikelen; een geleerde voorkeur
             // kan een artikel er alsnog overheen tillen.
-            if scoring && item.relevance != nil && rank < minimum { continue }
-            ranked.append((item, rank))
+            if scoring && item.relevance != nil && store.rank(item) < minimum { continue }
+            candidates.append((item, store.settings.sort == .forYou ? store.rankForYou(item) : 0))
         }
-        ranked.sort { a, b in
-            abs(a.rank - b.rank) > 0.5 ? a.rank > b.rank : a.item.publishedAt > b.item.publishedAt
+        if store.settings.sort == .newest {
+            return candidates.sorted { $0.item.publishedAt > $1.item.publishedAt }.map { $0.item.id }
         }
-        return ranked.map { $0.item.id }
+        return Self.diversified(candidates)
+    }
+
+    /// "Voor jou": steeds het hoogst gerangschikte artikel kiezen, met een
+    /// kleine straf voor elke eerdere keuze uit dezelfde bron, zodat één bron
+    /// (bv. Hacker News) niet de hele top vult.
+    private static func diversified(_ candidates: [(item: FeedItem, rank: Double)]) -> [String] {
+        var pool = candidates.sorted { $0.rank > $1.rank }
+        var perSource: [String: Int] = [:]
+        var result: [String] = []
+        result.reserveCapacity(pool.count)
+        while !pool.isEmpty {
+            // Alleen de eerste ~20 kandidaten bekijken: genoeg voor afwisseling, snel bij 500 artikelen.
+            var best = 0
+            var bestScore = -Double.infinity
+            for i in pool.indices.prefix(20) {
+                let score = pool[i].rank - 6 * Double(perSource[pool[i].item.sourceLabel, default: 0])
+                if score > bestScore { best = i; bestScore = score }
+            }
+            let chosen = pool.remove(at: best)
+            perSource[chosen.item.sourceLabel, default: 0] += 1
+            result.append(chosen.item.id)
+        }
+        return result
     }
 
     private func applyOrder() {
@@ -110,6 +130,7 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                     Section {
+                        sortPicker
                         if !topics.isEmpty { topicChips }
                         if store.scoringRemaining > 0 { scoringBanner }
                         if !store.lastError.isEmpty { errorBanner }
@@ -165,6 +186,7 @@ struct ContentView: View {
                 }
             }
             .onChange(of: store.settings.minRelevance) { applyOrder() }
+            .onChange(of: store.settings.sort) { applyOrder() }
             .onChange(of: store.preferences.influence) { applyOrder() }
             .onChange(of: store.settings.engine) { applyOrder() }
             .searchable(text: $query, prompt: "Zoeken…")
@@ -265,6 +287,18 @@ struct ContentView: View {
                   ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
         }
         .menuActionDismissBehavior(.disabled)
+    }
+
+    private var sortPicker: some View {
+        Picker("Volgorde", selection: Binding(
+            get: { store.settings.sort },
+            set: { store.settings.sort = $0 }
+        )) {
+            ForEach(FeedSort.allCases, id: \.self) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
     }
 
     private var topicChips: some View {

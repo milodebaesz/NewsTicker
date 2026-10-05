@@ -46,8 +46,21 @@ enum AIEngine: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum FeedSort: String, Codable, CaseIterable, Sendable {
+    case newest // chronologisch
+    case forYou // relevantie + wat de app geleerd heeft, met leeftijd meegewogen
+
+    var label: String {
+        switch self {
+        case .newest: "Nieuwste"
+        case .forYou: "Voor jou"
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable, Sendable {
     var engine = AIEngine.apple
+    var sort = FeedSort.newest
     var model = "gpt-4o-mini"
     var refreshMinutes = 15
     var minRelevance = 40 // 0-100, items hieronder worden verborgen (alleen als scoring aan staat)
@@ -62,6 +75,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppSettings()
         engine = try c.decodeIfPresent(AIEngine.self, forKey: .engine) ?? d.engine
+        sort = try c.decodeIfPresent(FeedSort.self, forKey: .sort) ?? d.sort
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? d.model
         refreshMinutes = try c.decodeIfPresent(Int.self, forKey: .refreshMinutes) ?? d.refreshMinutes
         // De oude schuifregelaar kon elke waarde geven; afronden naar de vaste niveaus.

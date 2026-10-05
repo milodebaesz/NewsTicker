@@ -374,6 +374,13 @@ final class AppStore {
         return base + preferences.boost(for: item)
     }
 
+    /// Rangscore voor "Voor jou": zakt 2 punten per uur, zodat een topper van
+    /// gisteren (90, 18 uur oud → 54) niet boven vers nieuws blijft hangen.
+    func rankForYou(_ item: FeedItem) -> Double {
+        let hours = max(0, Date.now.timeIntervalSince(item.publishedAt) / 3600)
+        return rank(item) - 2 * min(hours, 48)
+    }
+
     private func patch<V>(_ values: [String: V], save: Bool = true, _ apply: (inout FeedItem, V) -> Void) {
         guard !values.isEmpty else { return }
         setItems(items.map { item in

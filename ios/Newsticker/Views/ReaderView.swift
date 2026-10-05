@@ -70,23 +70,52 @@ struct ReaderView: View {
         }
     }
 
+    private var host: String {
+        URL(string: selected.url)?.host(percentEncoded: false)?.replacingOccurrences(of: "www.", with: "") ?? ""
+    }
+
+    // "vandaag 10:27", "gisteren 18:05" of "3 okt 10:27"
+    private var publishedText: String {
+        let date = selected.publishedAt
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if Calendar.current.isDateInToday(date) { return "vandaag \(time)" }
+        if Calendar.current.isDateInYesterday(date) { return "gisteren \(time)" }
+        return "\(date.formatted(.dateTime.day().month(.abbreviated))) \(time)"
+    }
+
+    // Duidelijke bronvermelding bovenaan; tik om het origineel te openen.
     private var meta: some View {
-        HStack(spacing: 6) {
-            Text(selected.sourceLabel).fontWeight(.semibold).foregroundStyle(Theme.brand)
-            Text("· \(selected.publishedAt.timeAgo)")
-            if !selected.topic.isEmpty {
-                Text(selected.topic)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .overlay { Capsule().strokeBorder(Theme.line) }
+        Button { webPage = selected } label: {
+            HStack(spacing: 10) {
+                SourceIcon(host: host)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(selected.sourceLabel)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.ink)
+                    Text("\(host) · \(publishedText)")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer(minLength: 8)
+                if !selected.topic.isEmpty {
+                    Text(selected.topic)
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .overlay { Capsule().strokeBorder(Theme.line) }
+                }
+                Image(systemName: "arrow.up.right.square")
+                    .foregroundStyle(Theme.brand)
             }
+            .contentShape(.rect)
         }
-        .font(.caption)
-        .foregroundStyle(Theme.muted)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Bron: \(selected.sourceLabel), \(publishedText). Open het origineel.")
     }
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(story.others.isEmpty ? "Samenvatting" : "Samenvatting van \(story.all.count) bronnen", systemImage: "sparkles")
+            Label("Samenvatting door Apple Intelligence", systemImage: "sparkles")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Theme.brand)
             if let summary {
@@ -95,6 +124,10 @@ struct ReaderView: View {
                     .foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                Text("Op basis van \(story.all.map(\.sourceLabel).formatted(.list(type: .and))) · kan fouten bevatten, controleer het origineel")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -167,17 +200,35 @@ struct ReaderView: View {
         }
     }
 
+    // Altijd onder de tekst: van wie het artikel is, en een weg naar het origineel.
     private var websiteButton: some View {
-        Button {
-            webPage = selected
-        } label: {
-            Label("Lees op \(URL(string: selected.url)?.host(percentEncoded: false)?.replacingOccurrences(of: "www.", with: "") ?? "de website")",
-                  systemImage: "safari")
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                SourceIcon(host: host)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Dit artikel is van \(selected.sourceLabel)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.ink)
+                    Text("Oorspronkelijk gepubliceerd op \(host), \(publishedText). Alle rechten bij de uitgever.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button {
+                webPage = selected
+            } label: {
+                Label("Lees het origineel op \(host.isEmpty ? "de website" : host)", systemImage: "safari")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.brand)
+            .controlSize(.large)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .padding(.top, 6)
+        .padding(14)
+        .background(Theme.card, in: .rect(cornerRadius: 14))
+        .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.line) }
+        .padding(.top, 10)
     }
 
     // MARK: - Laden
@@ -198,5 +249,24 @@ struct ReaderView: View {
         } catch {
             summaryFailed = true
         }
+    }
+}
+
+// Logo van de bron (favicon), met een neutraal icoon als terugval.
+private struct SourceIcon: View {
+    let host: String
+
+    var body: some View {
+        AsyncImage(url: host.isEmpty ? nil : URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")) { phase in
+            if case .success(let img) = phase {
+                img.resizable().scaledToFit()
+            } else {
+                Image(systemName: "newspaper").foregroundStyle(Theme.brand)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .background(Theme.subtle, in: .rect(cornerRadius: 7))
+        .clipShape(.rect(cornerRadius: 7))
+        .accessibilityHidden(true)
     }
 }
