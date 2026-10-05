@@ -5,8 +5,8 @@ struct FeedCandidate: Identifiable, Hashable, Sendable {
     var title: String
     var detail = "" // korte omschrijving
     var site = "" // domein, bv. nos.nl
-    var followers = 0 // aantal Feedly-volgers (0 = onbekend)
     var icon = "" // icoon-URL, "" = favicon van het domein
+    var keywords: [String] = [] // extra zoekwoorden in de catalogus
     var id: String { url }
 }
 

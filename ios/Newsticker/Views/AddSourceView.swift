@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Bron toevoegen: zoeken op naam/onderwerp (Feedly), een website-URL
+// Bron toevoegen: zoeken in de eigen bronnenlijst, een website-URL
 // doorzoeken op feeds, of kiezen uit populaire bronnen. Per feed kun je
 // eerst de laatste koppen bekijken.
 struct AddSourceView: View {
@@ -52,7 +52,7 @@ struct AddSourceView: View {
     private var catalog: some View {
         Group {
             Section {
-                Label("Zoek op naam (\"Tweakers\"), onderwerp (\"formule 1\", \"ruimtevaart\") of plak een website-adres.",
+                Label("Zoek op naam (\"Tweakers\"), onderwerp (\"apple\", \"f1\", \"klimaat\") of typ een website-adres.",
                       systemImage: "magnifyingglass")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -82,7 +82,7 @@ struct AddSourceView: View {
             }
         }
         if !results.isEmpty {
-            Section("Zoekresultaten") {
+            Section("Uit de lijst") {
                 ForEach(results) { FeedRow(candidate: $0, onAdd: add) }
             }
         }
@@ -108,21 +108,28 @@ struct AddSourceView: View {
     private func search(_ q: String) async {
         searching = true
         error = ""
-        // Een URL eerst op de site zelf doorzoeken; zoeken op naam gebeurt altijd.
-        async let site: [FeedCandidate] = FeedSearch.looksLikeURL(q) ? ((try? await Discover.feeds(for: q)) ?? []) : []
-        do {
-            let found = try await FeedSearch.search(q)
-            guard q == trimmed else { return } // intussen verder getypt
-            results = found
-        } catch {
-            guard q == trimmed else { return }
-            results = []
-            self.error = "Zoeken lukt nu niet (\(error.localizedDescription)). Je kunt ook het adres van de website invullen."
+        // Eerst de eigen lijst: direct, zonder internet.
+        results = FeedCatalog.search(q)
+
+        // Een website-adres: de feeds die de site zelf publiceert. Eén los woord
+        // zonder treffer in de lijst ("bright"): probeer bright.nl en bright.com.
+        var sites: [String] = []
+        if FeedSearch.looksLikeURL(q) {
+            sites = [q]
+        } else if results.isEmpty, !q.contains(" "), q.count >= 3 {
+            sites = ["\(q).nl", "\(q).com"]
         }
-        let siteResults = await site
-        guard q == trimmed else { return }
-        let resultKeys = Set(results.map { Discover.key($0.url) })
-        siteFeeds = siteResults.filter { !resultKeys.contains(Discover.key($0.url)) }
+        var found: [FeedCandidate] = []
+        for site in sites {
+            found += (try? await Discover.feeds(for: site)) ?? []
+            guard q == trimmed else { return } // intussen verder getypt
+        }
+        let known = Set(results.map { Discover.key($0.url) })
+        var seen = Set<String>()
+        siteFeeds = found.filter { !known.contains(Discover.key($0.url)) && seen.insert(Discover.key($0.url)).inserted }
+        if results.isEmpty && siteFeeds.isEmpty {
+            error = "Niet gevonden in de lijst. Typ het adres van de website, bijvoorbeeld \"nos.nl\", dan zoekt de app daar naar feeds."
+        }
         searching = false
     }
 
@@ -207,7 +214,6 @@ private struct FeedRow: View {
     private var subtitle: String {
         var parts: [String] = []
         if !candidate.site.isEmpty { parts.append(candidate.site) }
-        if candidate.followers > 0 { parts.append("\(candidate.followers.formatted(.number.notation(.compactName))) volgers") }
         let head = parts.joined(separator: " · ")
         if candidate.detail.isEmpty { return head.isEmpty ? candidate.url : head }
         return head.isEmpty ? candidate.detail : "\(head) — \(candidate.detail)"
