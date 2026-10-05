@@ -21,6 +21,14 @@ struct SettingsView: View {
                     } label: {
                         Label("Jouw algoritme", systemImage: "brain")
                     }
+                    Button {
+                        dismiss()
+                        store.restartOnboarding()
+                    } label: {
+                        Label("Introductie opnieuw doorlopen", systemImage: "arrow.counterclockwise")
+                    }
+                } footer: {
+                    Text("Bij opnieuw doorlopen kies je je bronnen en interesses opnieuw; wat de app geleerd heeft, wordt dan gewist.")
                 }
 
                 Section {

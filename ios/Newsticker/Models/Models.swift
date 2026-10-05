@@ -5,6 +5,10 @@ struct FeedItem: Codable, Identifiable, Hashable, Sendable {
     var sourceLabel: String
     var title: String
     var summary: String
+    /// Volledige tekst als alinea's, alléén als de uitgever die zelf in de
+    /// feed meelevert (content:encoded / Atom content). We halen nooit tekst
+    /// van de website zelf.
+    var body: [String]? = nil
     var image: String // thumbnail-URL uit de feed, "" als geen
     var topic: String // onderwerp — uit feed-categorie, verfijnd door AI
     var url: String
@@ -87,10 +91,17 @@ struct AppSettings: Codable, Equatable, Sendable {
 }
 
 struct InterestProfile: Codable, Equatable, Sendable {
-    var description =
-        "Ik ben softwareontwikkelaar en bouw web-apps met React, Next.js, Supabase en AI/OpenAI. Ik volg tech, startups, AI-ontwikkelingen en de aandelenmarkt. Nederlandse en internationale actualiteit interesseert me ook."
-    var keywords = ["AI", "OpenAI", "React", "Next.js", "Supabase", "startups", "beurs", "tech"]
-    var mute = ["sport", "showbizz"]
+    // Nieuwe gebruikers beginnen leeg en kiezen bij de eerste start.
+    var description = ""
+    var keywords: [String] = []
+    var mute: [String] = []
+
+    /// Het vroegere standaardprofiel; blijft staan voor wie de app al gebruikte.
+    static let legacy = InterestProfile(
+        description: "Ik ben softwareontwikkelaar en bouw web-apps met React, Next.js, Supabase en AI/OpenAI. Ik volg tech, startups, AI-ontwikkelingen en de aandelenmarkt. Nederlandse en internationale actualiteit interesseert me ook.",
+        keywords: ["AI", "OpenAI", "React", "Next.js", "Supabase", "startups", "beurs", "tech"],
+        mute: ["sport", "showbizz"]
+    )
 }
 
 extension Date {

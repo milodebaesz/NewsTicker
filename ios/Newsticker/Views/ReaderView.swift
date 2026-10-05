@@ -7,8 +7,6 @@ struct ReaderView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var selected: FeedItem
-    @State private var articles: [String: ArticleReader.Article] = [:]
-    @State private var failed: Set<String> = []
     @State private var summary: String?
     @State private var summaryFailed = false
     @State private var webPage: FeedItem?
@@ -174,10 +172,12 @@ struct ReaderView: View {
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.line) }
     }
 
+    // Alleen wat de uitgever zelf in de feed meelevert: de volledige tekst als
+    // die erin zit, anders de korte inleiding met een duidelijke link.
     @ViewBuilder private var articleBody: some View {
-        if let article = articles[selected.id] {
+        if let body = selected.body, !body.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(article.paragraphs.enumerated()), id: \.offset) { _, p in
+                ForEach(Array(body.enumerated()), id: \.offset) { _, p in
                     Text(p)
                         .font(.body)
                         .lineSpacing(4)
@@ -186,18 +186,15 @@ struct ReaderView: View {
                         .textSelection(.enabled)
                 }
             }
-            websiteButton
-        } else if failed.contains(selected.id) {
-            if !selected.summary.isEmpty {
-                Text(selected.summary).font(.body).lineSpacing(4).foregroundStyle(Theme.ink)
-            }
-            Text("De volledige tekst kon niet in de app worden geladen.")
-                .font(.footnote)
-                .foregroundStyle(Theme.muted)
-            websiteButton
-        } else {
-            HStack { Spacer(); ProgressView(); Spacer() }.padding(.vertical, 30)
+        } else if !selected.summary.isEmpty {
+            Text(selected.summary)
+                .font(.body)
+                .lineSpacing(4)
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
         }
+        websiteButton
     }
 
     // Altijd onder de tekst: van wie het artikel is, en een weg naar het origineel.
@@ -218,7 +215,8 @@ struct ReaderView: View {
             Button {
                 webPage = selected
             } label: {
-                Label("Lees het origineel op \(host.isEmpty ? "de website" : host)", systemImage: "safari")
+                Label("\(selected.body == nil ? "Lees het hele artikel" : "Lees het origineel") op \(host.isEmpty ? "de website" : host)",
+                      systemImage: "safari")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -234,15 +232,10 @@ struct ReaderView: View {
     // MARK: - Laden
 
     private func loadAll() async {
-        // Alle bronnen van het verhaal tegelijk ophalen.
-        let tasks = story.all.map { item in Task { (item.id, await ArticleReader.fetch(item.url)) } }
-        for task in tasks {
-            let (id, article) = await task.value
-            if let article { articles[id] = article } else { failed.insert(id) }
-        }
         guard Summarizer.isAvailable else { return }
+        // Samenvatten op basis van wat de feeds zelf geven (geen websitetekst).
         let texts = story.all.map { item in
-            (source: item.sourceLabel, text: "\(item.title)\n\(articles[item.id]?.text ?? item.summary)")
+            (source: item.sourceLabel, text: "\(item.title)\n\((item.body ?? []).joined(separator: "\n").nonEmpty ?? item.summary)")
         }
         do {
             summary = try await Summarizer.summarize(texts)
@@ -269,4 +262,8 @@ private struct SourceIcon: View {
         .clipShape(.rect(cornerRadius: 7))
         .accessibilityHidden(true)
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

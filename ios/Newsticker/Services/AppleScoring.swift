@@ -81,9 +81,9 @@ enum AppleScoring {
     private static func instructions(for profile: InterestProfile) -> String {
         """
         Je beoordeelt nieuwsartikelen voor één gebruiker.
-        Over de gebruiker: \(profile.description)
-        Interesses: \(profile.keywords.joined(separator: ", ")).
-        Niet interessant: \(profile.mute.joined(separator: ", ")).
+        \(profile.description.isEmpty ? "" : "Over de gebruiker: \(profile.description)")
+        Interesses: \(profile.keywords.isEmpty ? "algemeen nieuws" : profile.keywords.joined(separator: ", ")).
+        Niet interessant: \(profile.mute.isEmpty ? "niets in het bijzonder" : profile.mute.joined(separator: ", ")).
         Algemene Nederlandse en internationale actualiteit is 'beetje' relevant.
         'zeerRelevant' alleen als het artikel echt over een van de interesses gaat.
         """

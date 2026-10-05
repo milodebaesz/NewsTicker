@@ -33,6 +33,43 @@ final class AppStore {
         didSet { Keychain.set(openAIKey, for: "openaiKey") }
     }
 
+    // MARK: - Eerste start
+
+    private static let onboardingKey = "onboardingDone"
+
+    /// Moet de introductie nog getoond worden?
+    var needsOnboarding = false
+
+    init() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.onboardingKey) == nil {
+            if items.isEmpty {
+                needsOnboarding = true
+            } else {
+                // Bestaande gebruiker van vóór de introductie: niets opnieuw
+                // vragen, en het oude standaardprofiel bewaren.
+                defaults.set(true, forKey: Self.onboardingKey)
+                if Persist.load(InterestProfile.self, "profile") == nil { profile = .legacy }
+            }
+        }
+    }
+
+    func completeOnboarding(sources chosen: [Source], profile newProfile: InterestProfile) {
+        sources = chosen
+        profile = newProfile
+        items = []
+        Persist.save(items, "items")
+        preferences.reset()
+        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        needsOnboarding = false
+        Task { await refresh() }
+    }
+
+    func restartOnboarding() {
+        UserDefaults.standard.removeObject(forKey: Self.onboardingKey)
+        needsOnboarding = true
+    }
+
     /// Wordt er op dit moment met AI gescoord/gesorteerd?
     var scoringActive: Bool {
         switch settings.engine {
@@ -91,6 +128,7 @@ final class AppStore {
     /// Haalt alle bronnen op. Het scoren loopt daarna los op de achtergrond
     /// verder (zie `scoringTask`), zodat verversen snel klaar is.
     func refresh() async {
+        guard !needsOnboarding else { return } // eerst bronnen kiezen
         // Loopt er al een verversing (bv. gestart door de app bij openen), wacht
         // daar dan op i.p.v. meteen terug te keren met nog oud nieuws.
         if let refreshTask {

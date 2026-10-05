@@ -214,6 +214,16 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAddSource) { AddSourceView() }
         .sheet(isPresented: $showBriefing) { BriefingView() }
+        .fullScreenCover(isPresented: Binding(get: { store.needsOnboarding }, set: { _ in })) {
+            OnboardingView()
+        }
+        .onChange(of: store.needsOnboarding) { _, needs in
+            // Na de introductie: nieuwe bronnen, dus een verse volgorde.
+            if !needs {
+                order = []
+                groups = []
+            }
+        }
         // Getikt op de briefingmelding.
         .onChange(of: notifications.openRequested, initial: true) {
             guard notifications.openRequested else { return }
