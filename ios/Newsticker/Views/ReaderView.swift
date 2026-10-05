@@ -31,6 +31,9 @@ struct ReaderView: View {
                         if !story.others.isEmpty { sourcesSection }
                         articleBody
                     }
+                    // Prettige regellengte, ook op de iPad.
+                    .frame(maxWidth: 680, alignment: .leading)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
                 }
                 .padding(.bottom, 40)
@@ -49,6 +52,8 @@ struct ReaderView: View {
         }
         .sheet(item: $webPage) { SafariView(url: URL(string: $0.url)!).ignoresSafeArea() }
         .task { await loadAll() }
+        // Op de iPad een groot leesvenster in plaats van een klein formulier.
+        .presentationSizing(.page)
     }
 
     // MARK: - Onderdelen
@@ -220,7 +225,7 @@ struct ReaderView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.brand)
+            .tint(Theme.button)
             .controlSize(.large)
         }
         .padding(14)

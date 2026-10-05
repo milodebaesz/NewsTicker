@@ -109,6 +109,14 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Nieuwsband bovenin", isOn: $store.settings.showTicker)
+                } header: {
+                    Text("Weergave")
+                } footer: {
+                    Text("De doorlopende band met koppen boven de feed.")
+                }
+
+                Section {
                     Link(destination: URL(string: "https://milodebaesz.github.io/NewsTicker/privacy.html")!) {
                         Label("Privacybeleid", systemImage: "hand.raised")
                     }
@@ -173,7 +181,7 @@ struct SourcesView: View {
                 Toggle(isOn: $src.enabled) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(src.label)
-                        Text(src.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        status(for: src)
                     }
                 }
             }
@@ -186,5 +194,24 @@ struct SourcesView: View {
             Button("Toevoegen", systemImage: "plus") { showFinder = true }
         }
         .sheet(isPresented: $showFinder) { AddSourceView() }
+    }
+
+    @ViewBuilder private func status(for source: Source) -> some View {
+        let host = URL(string: source.url)?.host(percentEncoded: false)?.replacingOccurrences(of: "www.", with: "") ?? source.url
+        if !source.enabled {
+            Text("\(host) · uit").font(.caption).foregroundStyle(.secondary)
+        } else if let status = store.sourceStatus[source.id], status.isBroken {
+            let since = status.failingSince?.timeAgo ?? ""
+            Label("Werkt niet sinds \(since): \(status.lastError)", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+        } else if let status = store.sourceStatus[source.id], let ok = status.lastSuccess {
+            Text("\(host) · \(status.lastCount) artikelen · \(ok.timeAgo == "zojuist" ? "zojuist" : "\(ok.timeAgo) geleden")")
+                .font(.caption)
+                .foregroundStyle(status.lastCount == 0 ? .orange : .secondary)
+        } else {
+            Text(host).font(.caption).foregroundStyle(.secondary)
+        }
     }
 }

@@ -25,6 +25,8 @@ final class AppStore {
     var profile: InterestProfile = Persist.load(InterestProfile.self, "profile") ?? InterestProfile() {
         didSet { Persist.save(profile, "profile") }
     }
+    private(set) var sourceStatus: [String: SourceStatus] = Persist.load([String: SourceStatus].self, "sourceStatus") ?? [:]
+
     // RSS-bronnen die de gebruiker in het filter heeft uitgevinkt.
     var hiddenSources: Set<String> = Persist.load(Set<String>.self, "hiddenSources") ?? [] {
         didSet { Persist.save(hiddenSources, "hiddenSources") }
@@ -146,14 +148,35 @@ final class AppStore {
     private func performRefresh() async {
         isRefreshing = true
 
-        let (collected, errors) = await Self.fetchAll(sources.filter(\.enabled))
+        let results = await Self.fetchAll(sources.filter(\.enabled))
+        var collected: [FeedItem] = []
+        for (source, result) in results {
+            var status = sourceStatus[source.id] ?? SourceStatus()
+            switch result {
+            case .success(let items):
+                collected += items
+                status.lastSuccess = .now
+                status.lastCount = items.count
+                status.failures = 0
+                status.failingSince = nil
+                status.lastError = ""
+            case .failure(let error):
+                status.failures += 1
+                if status.failingSince == nil { status.failingSince = .now }
+                status.lastError = error.localizedDescription
+            }
+            sourceStatus[source.id] = status
+        }
+        Persist.save(sourceStatus, "sourceStatus")
+        let broken = sources.filter { $0.enabled && sourceStatus[$0.id]?.isBroken == true }.map(\.label)
 
         upsert(collected)
         await backfillImages()
         pruneOld()
 
         lastRefresh = .now
-        lastError = errors.joined(separator: " · ")
+        lastError = broken.isEmpty ? "" :
+            "\(broken.formatted(.list(type: .and))) \(broken.count == 1 ? "werkt" : "werken") al een tijdje niet. Kijk bij Instellingen › Bronnen."
         Persist.save(lastRefresh, "lastRefresh")
         isRefreshing = false
         feedVersion += 1
@@ -223,21 +246,15 @@ final class AppStore {
     // (TaskGroup::offer / __cxa_pure_virtual), met -Onone niet.
 
     // Alle bronnen tegelijk ophalen.
-    nonisolated private static func fetchAll(_ sources: [Source]) async -> ([FeedItem], [String]) {
+    nonisolated private static func fetchAll(_ sources: [Source]) async -> [(Source, Result<[FeedItem], Error>)] {
         let tasks = sources.map { src in
             Task { () -> Result<[FeedItem], Error> in
                 do { return .success(try await RSS.fetch(src)) } catch { return .failure(error) }
             }
         }
-        var collected: [FeedItem] = []
-        var errors: [String] = []
-        for (src, task) in zip(sources, tasks) {
-            switch await task.value {
-            case .success(let fetched): collected += fetched
-            case .failure(let error): errors.append("\(src.label): \(error.localizedDescription)")
-            }
-        }
-        return (collected, errors)
+        var results: [(Source, Result<[FeedItem], Error>)] = []
+        for (src, task) in zip(sources, tasks) { results.append((src, await task.value)) }
+        return results
     }
 
     nonisolated private static func fetchImages(_ items: [(String, String)]) async -> [String: String] {

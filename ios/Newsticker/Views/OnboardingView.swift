@@ -192,7 +192,7 @@ struct OnboardingView: View {
                     Text(primaryTitle).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Theme.brand)
+                .tint(Theme.button)
                 .controlSize(.large)
                 .disabled(step == .sources && chosen.isEmpty)
             }

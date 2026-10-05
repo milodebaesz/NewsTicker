@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var showBriefing = false
     #if DEBUG
     @State private var showAlgorithm = false
+    @State private var showSourcesDebug = false
     #endif
     private let notifications = BriefingNotifications.shared
     @State private var reading: StoryClusters.Story?
@@ -148,7 +149,7 @@ struct ContentView: View {
                         BentoFeed(stories: visibleStories, open: open)
                         if visible.isEmpty { emptyState }
                     } header: {
-                        if !tickerItems.isEmpty {
+                        if store.settings.showTicker && !tickerItems.isEmpty {
                             TickerView(items: tickerItems, onTap: { open(StoryClusters.Story(lead: $0, others: [])) },
                                        paused: reading != nil || showBriefing || showSettings || showAddSource)
                         }
@@ -170,7 +171,7 @@ struct ContentView: View {
                             .padding(.vertical, 10)
                     }
                     .buttonStyle(.glassProminent)
-                    .tint(Theme.brand)
+                    .tint(Theme.button)
                     .padding(.top, 52)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
@@ -219,6 +220,7 @@ struct ContentView: View {
         .sheet(isPresented: $showBriefing) { BriefingView() }
         #if DEBUG
         .sheet(isPresented: $showAlgorithm) { NavigationStack { AlgorithmView() } }
+        .sheet(isPresented: $showSourcesDebug) { NavigationStack { SourcesView() } }
         .task { await openScreenForScreenshot() }
         #endif
         .fullScreenCover(isPresented: Binding(get: { store.needsOnboarding }, set: { _ in })) {
@@ -397,7 +399,7 @@ private struct Chip: View {
 }
 
 #if DEBUG
-// Alleen voor App Store-screenshots: `-NTScreenshot feed|reader|briefing|algorithm|onboarding`
+// Alleen voor screenshots en controle: `-NTScreenshot feed|reader|briefing|algorithm|sources|onboarding`
 // bij het opstarten opent direct dat scherm. Niet in de App Store-versie.
 extension ContentView {
     fileprivate func openScreenForScreenshot() async {
@@ -412,6 +414,8 @@ extension ContentView {
             reading = visibleStories.first { !$0.others.isEmpty } ?? visibleStories.first
         case "briefing":
             showBriefing = true
+        case "sources":
+            showSourcesDebug = true
         case "algorithm":
             // Voorbeeldprofiel voor de screenshot.
             if store.preferences.isEmpty {

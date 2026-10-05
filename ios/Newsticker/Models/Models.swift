@@ -36,6 +36,18 @@ struct Source: Codable, Identifiable, Hashable, Sendable {
     ]
 }
 
+/// Hoe het met een bron gaat, voor de lijst bij Bronnen.
+struct SourceStatus: Codable, Sendable {
+    var lastSuccess: Date?
+    var lastCount = 0 // artikelen bij de laatste geslaagde keer
+    var failures = 0 // mislukte keren op rij
+    var failingSince: Date?
+    var lastError = ""
+
+    /// Pas na een paar keer op rij melden: één haperende server is normaal.
+    var isBroken: Bool { failures >= 3 }
+}
+
 enum AIEngine: String, Codable, CaseIterable, Sendable {
     case apple // Apple Intelligence, op het toestel
     case openAI
@@ -68,6 +80,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var model = "gpt-4o-mini"
     var refreshMinutes = 15
     var minRelevance = 40 // 0-100, items hieronder worden verborgen (alleen als scoring aan staat)
+    var showTicker = true
     var briefingEnabled = false
     var briefingMinutes = 7 * 60 + 30 // tijd van de ochtendbriefing, minuten na middernacht
 
@@ -85,6 +98,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         // De oude schuifregelaar kon elke waarde geven; afronden naar de vaste niveaus.
         let min = try c.decodeIfPresent(Int.self, forKey: .minRelevance) ?? d.minRelevance
         minRelevance = [90, 70, 40, 0].first { min >= $0 } ?? 0
+        showTicker = try c.decodeIfPresent(Bool.self, forKey: .showTicker) ?? d.showTicker
         briefingEnabled = try c.decodeIfPresent(Bool.self, forKey: .briefingEnabled) ?? d.briefingEnabled
         briefingMinutes = try c.decodeIfPresent(Int.self, forKey: .briefingMinutes) ?? d.briefingMinutes
     }

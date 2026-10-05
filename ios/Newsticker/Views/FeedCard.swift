@@ -6,18 +6,25 @@ struct BentoFeed: View {
     let stories: [Story]
     let open: (Story) -> Void
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
+    // Hoogtes groeien mee met de tekstgrootte uit iOS-instellingen.
+    @ScaledMetric(relativeTo: .body) private var bigHeight: CGFloat = 280
+    @ScaledMetric(relativeTo: .body) private var pairHeight: CGFloat = 200
+    @ScaledMetric(relativeTo: .body) private var wideHeight: CGFloat = 130
 
     private enum Row: Identifiable {
-        case big(Story), wide(Story), pair([Story])
+        case big(Story), wide(Story), pair([Story]), list(Story)
         var id: String {
             switch self {
-            case .big(let i), .wide(let i): i.id
+            case .big(let i), .wide(let i), .list(let i): i.id
             case .pair(let p): p.map(\.id).joined(separator: "+")
             }
         }
     }
 
     private var rows: [Row] {
+        // Heel grote tekst: één kaart per rij, zo hoog als de tekst nodig heeft.
+        if typeSize.isAccessibilitySize { return stories.map(Row.list) }
         var out: [Row] = []
         var rest = stories[...]
         var step = 0
@@ -42,15 +49,18 @@ struct BentoFeed: View {
             Group {
                 switch row {
                 case .big(let story):
-                    FeedCard(story: story, style: .big, open: open).frame(height: sizeClass == .regular ? 360 : 280)
+                    FeedCard(story: story, style: .big, open: open)
+                        .frame(height: sizeClass == .regular ? bigHeight * 360 / 280 : bigHeight)
                 case .wide(let story):
-                    FeedCard(story: story, style: .wide, open: open).frame(height: 130)
+                    FeedCard(story: story, style: .wide, open: open).frame(height: wideHeight)
+                case .list(let story):
+                    FeedCard(story: story, style: .list, open: open)
                 case .pair(let pair):
                     HStack(spacing: 12) {
                         ForEach(pair) { FeedCard(story: $0, style: .small, open: open) }
                         if pair.count < (sizeClass == .regular ? 3 : 2) { Color.clear }
                     }
-                    .frame(height: 200)
+                    .frame(height: pairHeight)
                 }
             }
             .padding(.horizontal, 16)
@@ -60,7 +70,7 @@ struct BentoFeed: View {
 }
 
 struct FeedCard: View {
-    enum Style { case big, small, wide }
+    enum Style { case big, small, wide, list }
 
     let story: StoryClusters.Story
     let style: Style
@@ -78,6 +88,8 @@ struct FeedCard: View {
             Group {
                 if style == .wide {
                     wideLayout
+                } else if style == .list {
+                    listLayout
                 } else if let imageURL {
                     overlayLayout(imageURL)
                 } else {
@@ -164,6 +176,28 @@ struct FeedCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    // Voor heel grote tekst: afbeelding boven, tekst eronder, geen vaste hoogte.
+    private var listLayout: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let imageURL {
+                Theme.subtle.overlay { image(imageURL) }.frame(height: 160).clipped()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                meta(onImage: false)
+                Text(item.title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !item.summary.isEmpty {
+                    Text(item.summary).font(.subheadline).foregroundStyle(Theme.muted).lineLimit(4)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.card)
+    }
+
     private var wideLayout: some View {
         HStack(spacing: 0) {
             if let imageURL {
@@ -210,7 +244,7 @@ struct FeedCard: View {
             Spacer(minLength: 0)
         }
         .font(.caption2)
-        .lineLimit(1)
+        .lineLimit(style == .list ? 2 : 1)
         .foregroundStyle(onImage ? .white.opacity(0.8) : Theme.muted)
     }
 

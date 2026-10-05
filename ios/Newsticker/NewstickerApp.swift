@@ -73,6 +73,9 @@ struct NewstickerApp: App {
 // Navy + goud, afgestemd op de extensie (Goalflow-palet), met donkere variant.
 enum Theme {
     static let brand = dynamic(light: 0x2C4F87, dark: 0x8CA7CC)
+    /// Vulkleur van hoofdknoppen met witte tekst: in het donker niet het lichte
+    /// merkblauw (te weinig contrast), maar navy-500.
+    static let button = dynamic(light: 0x2C4F87, dark: 0x3B63A0)
     static let accent = Color(hex: 0xF59E0B)
     static let ink = dynamic(light: 0x1B2A44, dark: 0xF1F4FA)
     static let muted = dynamic(light: 0x3B63A0, dark: 0x8CA7CC)
