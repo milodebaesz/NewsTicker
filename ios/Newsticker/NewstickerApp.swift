@@ -33,6 +33,7 @@ struct NewstickerApp: App {
                 Task { await store.refresh() }
             case .background:
                 store.pauseScoring()
+                Task { await store.updateWidget() } // gelezen artikelen eruit
                 scheduleAppRefresh()
                 scheduleScoring()
                 Task { await store.scheduleBriefingNotification() }

@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct ContentView: View {
     @Environment(AppStore.self) private var store
@@ -10,6 +11,7 @@ struct ContentView: View {
     #if DEBUG
     @State private var showAlgorithm = false
     @State private var showSourcesDebug = false
+    @State private var showWidgetDebug = false
     #endif
     private let notifications = BriefingNotifications.shared
     @State private var reading: StoryClusters.Story?
@@ -218,9 +220,15 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showAddSource) { AddSourceView() }
         .sheet(isPresented: $showBriefing) { BriefingView() }
+        // Getikt op een kop in de widget: newsticker://story/<id>
+        .onOpenURL { url in
+            guard url.scheme == WidgetSnapshot.urlScheme, url.host() == "story" else { return }
+            openStory(id: url.lastPathComponent)
+        }
         #if DEBUG
         .sheet(isPresented: $showAlgorithm) { NavigationStack { AlgorithmView() } }
         .sheet(isPresented: $showSourcesDebug) { NavigationStack { SourcesView() } }
+        .sheet(isPresented: $showWidgetDebug) { WidgetPreviewScreen() }
         .task { await openScreenForScreenshot() }
         #endif
         .fullScreenCover(isPresented: Binding(get: { store.needsOnboarding }, set: { _ in })) {
@@ -252,6 +260,17 @@ struct ContentView: View {
             // Verversen bij het openen: nieuwe artikelen meteen tonen, zonder knop.
             if store.isStale { await store.refresh(); applyOrder() } else { store.startScoring() }
         }
+    }
+
+    private func openStory(id: String) {
+        let byId = Dictionary(store.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        guard let lead = byId[id] else { return }
+        // Zelfde verhaal bij andere bronnen meenemen, als dat al bekend is.
+        let others = (groups.first { $0.contains(id) } ?? [id]).filter { $0 != id }.compactMap { byId[$0] }
+        showBriefing = false
+        showSettings = false
+        showAddSource = false
+        open(StoryClusters.Story(lead: lead, others: others))
     }
 
     private func open(_ story: StoryClusters.Story) {
@@ -399,7 +418,7 @@ private struct Chip: View {
 }
 
 #if DEBUG
-// Alleen voor screenshots en controle: `-NTScreenshot feed|reader|briefing|algorithm|sources|onboarding`
+// Alleen voor screenshots en controle: `-NTScreenshot feed|reader|briefing|algorithm|sources|widget|onboarding`
 // bij het opstarten opent direct dat scherm. Niet in de App Store-versie.
 extension ContentView {
     fileprivate func openScreenForScreenshot() async {
@@ -416,6 +435,9 @@ extension ContentView {
             showBriefing = true
         case "sources":
             showSourcesDebug = true
+        case "widget":
+            await store.updateWidget()
+            showWidgetDebug = true
         case "algorithm":
             // Voorbeeldprofiel voor de screenshot.
             if store.preferences.isEmpty {
@@ -429,6 +451,40 @@ extension ContentView {
         default:
             break
         }
+    }
+}
+
+/// De widget in zijn echte maten (iPhone Pro Max), om de weergave te controleren.
+private struct WidgetPreviewScreen: View {
+    private let snapshot = WidgetSnapshot.load() ?? .placeholder
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                HStack(spacing: 20) {
+                    tile(.systemSmall, 170, 170)
+                    VStack(alignment: .leading) {
+                        NewstickerWidgetView(family: .accessoryRectangular, snapshot: snapshot)
+                            .frame(width: 160, height: 72, alignment: .leading)
+                            .padding(8)
+                            .background(.black.opacity(0.75), in: .rect(cornerRadius: 12))
+                            .foregroundStyle(.white)
+                    }
+                }
+                tile(.systemMedium, 364, 170)
+                tile(.systemLarge, 364, 382)
+            }
+            .padding(.vertical, 30)
+            .frame(maxWidth: .infinity)
+        }
+        .background(LinearGradient(colors: [.teal, .blue], startPoint: .top, endPoint: .bottom))
+    }
+
+    private func tile(_ family: WidgetFamily, _ width: CGFloat, _ height: CGFloat) -> some View {
+        NewstickerWidgetView(family: family, snapshot: snapshot)
+            .frame(width: width, height: height)
+            .background(WTheme.canvas)
+            .clipShape(.rect(cornerRadius: 22))
     }
 }
 #endif

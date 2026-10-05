@@ -12,11 +12,20 @@ targets:
   Newsticker:
     type: application
     platform: iOS
-    sources: [Newsticker]
+    sources: [Newsticker, Shared]
+    dependencies:
+      - target: NewstickerWidget
+    entitlements:
+      path: Newsticker/Newsticker.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.mkdebie.newsticker]
     info:
       path: Newsticker/Info.plist
       properties:
         CFBundleDisplayName: Newsticker
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mkdebie.newsticker
+            CFBundleURLSchemes: [newsticker]
         LSApplicationCategoryType: public.app-category.news
         CFBundleDevelopmentRegion: nl
         CFBundleLocalizations: [nl]
@@ -40,3 +49,25 @@ targets:
         DEVELOPMENT_TEAM: SBB8YRNS5R
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1,2"
+
+  NewstickerWidget:
+    type: app-extension
+    platform: iOS
+    sources: [NewstickerWidget, Shared]
+    entitlements:
+      path: NewstickerWidget/NewstickerWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.mkdebie.newsticker]
+    info:
+      path: NewstickerWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Newsticker
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mkdebie.newsticker.widget
+        DEVELOPMENT_TEAM: SBB8YRNS5R
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES

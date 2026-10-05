@@ -180,6 +180,7 @@ final class AppStore {
         Persist.save(lastRefresh, "lastRefresh")
         isRefreshing = false
         feedVersion += 1
+        Task { await updateWidget() }
         startScoring()
     }
 
@@ -200,7 +201,20 @@ final class AppStore {
             }
             scoringTask = nil
             feedVersion += 1
+            await updateWidget()
         }
+    }
+
+    /// Zet de bovenste verhalen (volgens de gekozen volgorde) in de widget.
+    func updateWidget() async {
+        let candidates = items.filter { !$0.read && !$0.dismissed && !hiddenSources.contains($0.sourceLabel) }
+        let sorted: [FeedItem]
+        if settings.sort == .forYou {
+            sorted = candidates.map { ($0, rankForYou($0)) }.sorted { $0.1 > $1.1 }.map(\.0)
+        } else {
+            sorted = candidates.sorted { $0.publishedAt > $1.publishedAt }
+        }
+        await WidgetUpdater.update(stories: StoryClusters.group(Array(sorted.prefix(60))))
     }
 
     /// Bij naar de achtergrond gaan: stoppen i.p.v. laten mislukken. De rest
