@@ -34,9 +34,12 @@ struct BentoFeed: View {
         return out
     }
 
+    // Bewust geen eigen LazyVStack: de rijen worden direct onderdeel van de
+    // lazy lijst in ContentView. Een lazy lijst in een lazy lijst schat de
+    // hoogte verkeerd en liet de feed bij terugkeren naar onderen springen.
     var body: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(rows) { row in
+        ForEach(rows) { row in
+            Group {
                 switch row {
                 case .big(let story):
                     FeedCard(story: story, style: .big, open: open).frame(height: sizeClass == .regular ? 360 : 280)
@@ -50,6 +53,8 @@ struct BentoFeed: View {
                     .frame(height: 200)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
         }
     }
 }

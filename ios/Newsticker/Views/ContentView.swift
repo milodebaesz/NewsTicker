@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var newArticles = 0 // nieuw binnengekomen sinds de volgorde vastgezet werd
     @State private var orderAppliedAt = Date.distantPast
     @State private var applyAfterRefresh = false // terug in de app: verversing direct tonen
+    @State private var scrollPosition = ScrollPosition(edge: .top)
     @Environment(\.scenePhase) private var scenePhase
     // Verhaalindeling (zelfde nieuws, meerdere bronnen) bij de vaste volgorde;
     // alleen opnieuw berekend als de volgorde verandert.
@@ -59,6 +60,12 @@ struct ContentView: View {
             result.append(chosen.item.id)
         }
         return result
+    }
+
+    /// Nieuwe volgorde én terug naar boven: na verversen of terugkomen.
+    private func applyOrderFromTop() {
+        applyOrder()
+        withAnimation(.snappy) { scrollPosition.scrollTo(edge: .top) }
     }
 
     private func applyOrder() {
@@ -134,9 +141,8 @@ struct ContentView: View {
                         if !topics.isEmpty { topicChips }
                         if store.scoringRemaining > 0 { scoringBanner }
                         if !store.lastError.isEmpty { errorBanner }
+                        Color.clear.frame(height: 12)
                         BentoFeed(stories: visibleStories, open: open)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
                         if visible.isEmpty { emptyState }
                     } header: {
                         if !tickerItems.isEmpty {
@@ -147,13 +153,14 @@ struct ContentView: View {
                 }
             }
             .background(Theme.canvas)
+            .scrollPosition($scrollPosition)
             .refreshable {
                 await store.refresh()
                 applyOrder()
             }
             .overlay(alignment: .top) {
                 if newArticles > 0 {
-                    Button { applyOrder() } label: {
+                    Button { applyOrderFromTop() } label: {
                         Label(newArticles == 1 ? "1 nieuw artikel" : "\(newArticles) nieuwe artikelen", systemImage: "arrow.up")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
@@ -171,7 +178,7 @@ struct ContentView: View {
                 // verwerkt bij de volgende verversing of als je terugkomt.
                 if order.isEmpty || applyAfterRefresh {
                     applyAfterRefresh = false
-                    applyOrder()
+                    applyOrderFromTop()
                 } else {
                     let shown = Set(order)
                     let count = liveOrder.filter { !shown.contains($0) }.count
@@ -182,7 +189,7 @@ struct ContentView: View {
                 // Terug na een tijdje weg: meteen de beste volgorde.
                 if phase == .active, Date.now.timeIntervalSince(orderAppliedAt) > 10 * 60 {
                     applyAfterRefresh = store.isStale || store.isRefreshing
-                    applyOrder()
+                    applyOrderFromTop()
                 }
             }
             .onChange(of: store.settings.minRelevance) { applyOrder() }
