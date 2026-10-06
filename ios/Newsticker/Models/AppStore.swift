@@ -171,7 +171,6 @@ final class AppStore {
         let broken = sources.filter { $0.enabled && sourceStatus[$0.id]?.isBroken == true }.map(\.label)
 
         upsert(collected)
-        await backfillImages()
         pruneOld()
 
         lastRefresh = .now
@@ -242,17 +241,10 @@ final class AppStore {
                 it.reason = prev.reason
                 // bewaar het AI-onderwerp als dat er al is, anders de feed-categorie
                 if prev.relevance != nil { it.topic = prev.topic }
-                if it.image.isEmpty { it.image = prev.image }
             }
             byId[it.id] = it
         }
         setItems(Array(byId.values))
-    }
-
-    // Vult ontbrekende afbeeldingen aan (max 14 per ronde om het licht te houden).
-    private func backfillImages() async {
-        let missing = items.filter { $0.image.isEmpty && !$0.dismissed }.prefix(14).map { ($0.id, $0.url) }
-        patch(await Self.fetchImages(missing)) { $0.image = $1 }
     }
 
     // Parallel werk via losse Tasks i.p.v. withTaskGroup: de task group
@@ -269,16 +261,6 @@ final class AppStore {
         var results: [(Source, Result<[FeedItem], Error>)] = []
         for (src, task) in zip(sources, tasks) { results.append((src, await task.value)) }
         return results
-    }
-
-    nonisolated private static func fetchImages(_ items: [(String, String)]) async -> [String: String] {
-        let tasks = items.map { id, url in Task { (id, await OGImage.fetch(url)) } }
-        var found: [String: String] = [:]
-        for task in tasks {
-            let (id, img) = await task.value
-            if !img.isEmpty { found[id] = img }
-        }
-        return found
     }
 
     // Scoort items die nog geen relevantie hebben.

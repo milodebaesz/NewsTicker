@@ -177,30 +177,10 @@ struct ReaderView: View {
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.line) }
     }
 
-    // Alleen wat de uitgever zelf in de feed meelevert: de volledige tekst als
-    // die erin zit, anders de korte inleiding met een duidelijke link.
-    @ViewBuilder private var articleBody: some View {
-        if let body = selected.body, !body.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(body.enumerated()), id: \.offset) { _, p in
-                    Text(p)
-                        .font(.body)
-                        .lineSpacing(4)
-                        .foregroundStyle(Theme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-            }
-        } else if !selected.summary.isEmpty {
-            Text(selected.summary)
-                .font(.body)
-                .lineSpacing(4)
-                .foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-        }
-        websiteButton
-    }
+    // Geen tekst van de uitgever overnemen: alleen de AI-samenvatting (hierboven)
+    // en een duidelijke link naar het artikel zelf.
+    private var articleBody: some View { websiteButton }
+
 
     // Altijd onder de tekst: van wie het artikel is, en een weg naar het origineel.
     private var websiteButton: some View {
@@ -220,7 +200,7 @@ struct ReaderView: View {
             Button {
                 webPage = selected
             } label: {
-                Label("\(selected.body == nil ? "Lees het hele artikel" : "Lees het origineel") op \(host.isEmpty ? "de website" : host)",
+                Label("Lees het artikel op \(host.isEmpty ? "de website" : host)",
                       systemImage: "safari")
                     .frame(maxWidth: .infinity)
             }
@@ -238,9 +218,9 @@ struct ReaderView: View {
 
     private func loadAll() async {
         guard Summarizer.isAvailable else { return }
-        // Samenvatten op basis van wat de feeds zelf geven (geen websitetekst).
+        // Samenvatten op basis van kop en korte omschrijving uit de feeds.
         let texts = story.all.map { item in
-            (source: item.sourceLabel, text: "\(item.title)\n\((item.body ?? []).joined(separator: "\n").nonEmpty ?? item.summary)")
+            (source: item.sourceLabel, text: "\(item.title)\n\(item.summary)")
         }
         do {
             summary = try await Summarizer.summarize(texts)
@@ -267,8 +247,4 @@ private struct SourceIcon: View {
         .clipShape(.rect(cornerRadius: 7))
         .accessibilityHidden(true)
     }
-}
-
-private extension String {
-    var nonEmpty: String? { isEmpty ? nil : self }
 }

@@ -111,7 +111,7 @@ Newsticker verzamelt nieuws uit je favoriete bronnen, voegt hetzelfde verhaal va
 1. Doorloop de introductie en kies je bronnen en interesses.
 2. Gebruik de app een paar dagen: klopt "Voor jou", en voelt "Nieuwste" goed?
 3. Zet de ochtendbriefing aan: komt hij op tijd en kloppen de verhalen?
-4. Open artikelen: is duidelijk van welke bron ze zijn en hoe je het hele artikel leest?
+4. Open artikelen: is duidelijk van welke bron ze zijn en hoe je het artikel leest?
 5. Voeg een eigen bron toe via zoeken of een website-adres.
 6. Laat weten als iets traag is, vastloopt of onduidelijk is (schermafbeelding via TestFlight).
 
