@@ -255,7 +255,7 @@ struct OnboardingView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .foregroundStyle(state == .like ? Color.white : state == .mute ? Color.secondary : Theme.ink)
-            .background(state == .like ? Theme.brand : state == .mute ? Theme.subtle : Theme.card, in: .capsule)
+            .background(state == .like ? Theme.button : state == .mute ? Theme.subtle : Theme.card, in: .capsule)
             .overlay { if state == nil { Capsule().strokeBorder(Theme.line) } }
         }
         .buttonStyle(.plain)

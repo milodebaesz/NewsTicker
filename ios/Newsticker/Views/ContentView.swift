@@ -409,8 +409,10 @@ private struct Chip: View {
             .font(.caption.weight(.medium))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .foregroundStyle(selected ? Color.white : Theme.muted)
-            .background(selected ? Theme.ink : Color.clear, in: .capsule)
+            // Geselecteerd: donkere tekst op lichte vulling in donkere modus en
+            // andersom; niet-geselecteerd met een lichte vulling voor contrast.
+            .foregroundStyle(selected ? Theme.canvas : Theme.ink.opacity(0.85))
+            .background(selected ? Theme.ink : Theme.subtle, in: .capsule)
             .overlay { if !selected { Capsule().strokeBorder(Theme.line) } }
         }
         .buttonStyle(.plain)
