@@ -181,14 +181,12 @@ struct ReaderView: View {
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.line) }
     }
 
-    // Standaard geen tekst van de uitgever: alleen de AI-samenvatting (hierboven)
-    // en een link. Met "volledige artikelen" (eigen gebruik) ook de tekst zelf.
     @ViewBuilder private var articleBody: some View {
-        if !fullArticles {
-            websiteButton
-        } else if let article = articles[selected.id] {
+        // Volgorde: tekst die de uitgever zelf in de feed meelevert; anders (alleen
+        // met "volledige artikelen", eigen gebruik) de tekst van de website.
+        if let paragraphs = selected.body ?? articles[selected.id]?.paragraphs {
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(Array(article.paragraphs.enumerated()), id: \.offset) { _, p in
+                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, p in
                     Text(p)
                         .font(.body)
                         .lineSpacing(4)
@@ -197,6 +195,8 @@ struct ReaderView: View {
                         .textSelection(.enabled)
                 }
             }
+            websiteButton
+        } else if !fullArticles {
             websiteButton
         } else if failed.contains(selected.id) {
             Text("De tekst kon niet in de app worden geladen (bijvoorbeeld door een cookie- of betaalmuur).")
@@ -246,7 +246,7 @@ struct ReaderView: View {
     private func loadAll() async {
         if fullArticles {
             // Alle bronnen van het verhaal tegelijk ophalen.
-            let tasks = story.all.map { item in Task { (item.id, await ArticleReader.fetch(item.url)) } }
+            let tasks = story.all.filter { $0.body == nil }.map { item in Task { (item.id, await ArticleReader.fetch(item.url)) } }
             for task in tasks {
                 let (id, article) = await task.value
                 if let article { articles[id] = article } else { failed.insert(id) }
@@ -255,7 +255,7 @@ struct ReaderView: View {
         guard Summarizer.isAvailable else { return }
         // Samenvatten op basis van de artikeltekst (indien opgehaald) of kop en omschrijving.
         let texts = story.all.map { item in
-            (source: item.sourceLabel, text: "\(item.title)\n\(articles[item.id]?.text ?? item.summary)")
+            (source: item.sourceLabel, text: "\(item.title)\n\(item.body?.joined(separator: "\n") ?? articles[item.id]?.text ?? item.summary)")
         }
         do {
             summary = try await Summarizer.summarize(texts)

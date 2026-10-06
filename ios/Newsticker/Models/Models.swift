@@ -5,6 +5,9 @@ struct FeedItem: Codable, Identifiable, Hashable, Sendable {
     var sourceLabel: String
     var title: String
     var summary: String
+    /// Volledige tekst als alinea's, alléén als de uitgever die zelf in de
+    /// feed meelevert (content:encoded / Atom content).
+    var body: [String]? = nil
     var image: String // thumbnail-URL uit de feed, "" als geen
     var topic: String // onderwerp — uit feed-categorie, verfijnd door AI
     var url: String

@@ -58,6 +58,7 @@ private struct RawEntry {
             sourceLabel: source.label,
             title: title,
             summary: Self.truncate(Self.dropLinkMeta(HTMLText.strip(summarySource.isEmpty ? rawHtml : summarySource)), to: 400),
+            body: Self.feedBody(isAtom ? field("content") : field("content:encoded")),
             image: pickImage(html: rawHtml),
             topic: firstTopic(),
             url: link,
@@ -70,6 +71,20 @@ private struct RawEntry {
         )
     }
 
+    // Volledige tekst uit de feed, als die er echt is (niet alleen een teaser).
+    private static func feedBody(_ html: String) -> [String]? {
+        let paragraphs = HTMLText.paragraphs(html)
+        let length = paragraphs.reduce(0) { $0 + $1.count }
+        guard length >= 600 else { return nil }
+        // Begrensd, zodat de opslag klein blijft.
+        var kept: [String] = []
+        var total = 0
+        for p in paragraphs where total < 8_000 {
+            kept.append(p)
+            total += p.count
+        }
+        return kept
+    }
     // Inkorten op een woordgrens, met "…" als er iets is weggelaten.
     private static func truncate(_ text: String, to limit: Int) -> String {
         guard text.count > limit else { return text }
@@ -208,6 +223,17 @@ enum FeedDate {
 }
 
 enum HTMLText {
+    /// HTML naar alinea's: knipt op blok-elementen en <br>, daarna opschonen.
+    static func paragraphs(_ html: String) -> [String] {
+        guard !html.isEmpty else { return [] }
+        let marked = html.replacingOccurrences(
+            of: #"(?i)</p>|<br\s*/?>|</h[1-6]>|</li>|</blockquote>|</div>"#,
+            with: "\u{1E}", options: .regularExpression)
+        return marked
+            .components(separatedBy: "\u{1E}")
+            .map(strip)
+            .filter { $0.count >= 2 }
+    }
     static func strip(_ s: String) -> String {
         let noTags = s.replacingOccurrences(of: "<[^>]*>", with: " ", options: .regularExpression)
         return decodeEntities(noTags)
