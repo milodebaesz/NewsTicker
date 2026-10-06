@@ -171,6 +171,7 @@ final class AppStore {
         let broken = sources.filter { $0.enabled && sourceStatus[$0.id]?.isBroken == true }.map(\.label)
 
         upsert(collected)
+        if settings.personalFullArticles { await backfillImages() }
         pruneOld()
 
         lastRefresh = .now
@@ -239,12 +240,27 @@ final class AppStore {
                 it.dismissed = prev.dismissed
                 it.relevance = prev.relevance
                 it.reason = prev.reason
+                // Eerder aangevulde foto bewaren, zolang die instelling aan staat.
+                if it.image.isEmpty && settings.personalFullArticles { it.image = prev.image }
                 // bewaar het AI-onderwerp als dat er al is, anders de feed-categorie
                 if prev.relevance != nil { it.topic = prev.topic }
             }
             byId[it.id] = it
         }
         setItems(Array(byId.values))
+    }
+
+    // Alleen bij "volledige artikelen" (eigen gebruik): ontbrekende afbeeldingen
+    // aanvullen met de deelafbeelding van de artikelpagina (max 14 per ronde).
+    private func backfillImages() async {
+        let missing = items.filter { $0.image.isEmpty && !$0.dismissed }.prefix(14).map { ($0.id, $0.url) }
+        let tasks = missing.map { id, url in Task { (id, await OGImage.fetch(url)) } }
+        var found: [String: String] = [:]
+        for task in tasks {
+            let (id, img) = await task.value
+            if !img.isEmpty { found[id] = img }
+        }
+        patch(found) { $0.image = $1 }
     }
 
     // Parallel werk via losse Tasks i.p.v. withTaskGroup: de task group

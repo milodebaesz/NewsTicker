@@ -110,10 +110,11 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Nieuwsband bovenin", isOn: $store.settings.showTicker)
+                    Toggle("Volledige artikelen ophalen", isOn: $store.settings.personalFullArticles)
                 } header: {
                     Text("Weergave")
                 } footer: {
-                    Text("De doorlopende band met koppen boven de feed.")
+                    Text("De nieuwsband is de doorlopende band met koppen boven de feed. \"Volledige artikelen\" haalt de tekst en ontbrekende foto's van de website zelf op, zodat je in de app kunt lezen. Alleen bedoeld voor eigen gebruik.")
                 }
 
                 Section {

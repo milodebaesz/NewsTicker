@@ -44,3 +44,20 @@ enum Favicon {
         host.isEmpty ? nil : URL(string: "https://\(host)/favicon.ico")
     }
 }
+// Haalt de og:image van de artikelpagina op voor items zonder feed-afbeelding.
+enum OGImage {
+    static func fetch(_ urlString: String) async -> String {
+        guard let url = URL(string: urlString),
+              let data = try? await HTTP.get(url) else { return "" }
+        let html = String(decoding: data.prefix(250_000), as: UTF8.self) // <head> ruim genoeg
+        let patterns = [
+            #"<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']"#,
+            #"<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']"#,
+            #"<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']"#,
+        ]
+        for p in patterns {
+            if let m = Regex.firstGroup(p, in: html) { return m.replacingOccurrences(of: "&amp;", with: "&") }
+        }
+        return ""
+    }
+}
