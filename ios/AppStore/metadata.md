@@ -123,4 +123,4 @@ Niet nodig: de app heeft geen account.
 
 ## Screenshots
 
-In `ios/AppStore/screenshots/` (6,9 inch, 1320 × 2868). Volgorde: feed, leesweergave met samenvatting, briefing, "Jouw algoritme", introductie.
+Niet in git (persfoto's van derden); bewaard in ~/Documents/Newsticker-screenshots. Voor de App Store opnieuw maken met eigen voorbeeldinhoud. Formaat 6,9 inch, 1320 × 2868. Volgorde: feed, leesweergave met samenvatting, briefing, "Jouw algoritme", introductie.

@@ -22,3 +22,6 @@ ios/*.xcodeproj/
 ios/build/
 xcuserdata/
 DerivedData/
+
+# App Store-screenshots bevatten persfoto's van derden: niet publiceren
+ios/AppStore/screenshots/
